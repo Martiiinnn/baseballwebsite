@@ -1,0 +1,4 @@
+scenario,reliever_xwOBA,gap_vs_Snell,runs_saved_per_PA,win_prob_change_3_PA,basis
+"Full-strength Anderson, Nick",0.282,0.029,0.024,+1.8%,"2019-20 regular season (318 PA, xwOBA 0.253), regressed to league"
+Recent form,0.298,0.013,0.011,+0.8%,"postseason before Game 6 (57 PA, xwOBA 0.385), regressed to full-strength"
+Pessimistic,0.385,-0.074,-0.061,-4.5%,postseason xwOBA taken at face value

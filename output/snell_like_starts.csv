@@ -1,0 +1,4 @@
+,starts,reached_3rd,early_wOBA,early_K%,3rd_PA,3rd_wOBA,3rd_wOBA_95%,3rd_K%
+All starts that completed 2x through,8079,96%,0.311,0.239,43414,0.349,+/-0.005,0.197
+"Snell-like (K% >= 35%, wOBA <= 0.200)",531,97%,0.142,0.446,2892,0.314,+/-0.019,0.256
+Snell-like and <= 85 pitches,476,98%,0.142,0.443,2728,0.311,+/-0.020,0.259

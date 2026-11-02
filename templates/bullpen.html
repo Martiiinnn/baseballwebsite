@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import team_date_form %}
+{% block title %}Bullpen coach{% endblock %}
+{% block content %}
+<section class="hero compact">
+  <p class="eyebrow">Bullpen coach</p>
+  <h1>Who's rested, and who's throwing well?</h1>
+  <p class="lede">Every reliever {{ team }} used in the 45 days before {{ day }}, best options first.
+    "Recent" means {{ pen.recent_label }}; "season" is the {{ pen.season }} regular season.</p>
+</section>
+
+{{ team_date_form('bullpen', teams, team, day, span, "Before games on") }}
+
+{% if not pen.relievers %}
+<section class="panel"><p>No relievers found for {{ team }} in the 45 days before {{ day }}.</p></section>
+{% else %}
+<section class="panel">
+  <div class="table-wrap">
+  <table class="board">
+    <thead>
+      <tr>
+        <th>Reliever and notes</th>
+        <th>Rest and workload</th>
+        <th class="num">Fastball mph<br><span class="note">recent / season</span></th>
+        <th class="num">Whiff rate<br><span class="note">recent / season</span></th>
+        <th class="num">Expected wOBA<br><span class="note">recent form</span></th>
+        <th class="num">vs LHB / RHB<br><span class="note">2018–20</span></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in pen.relievers %}
+      <tr>
+        <td class="who">
+          <strong>{{ r.name }}</strong> <span class="note">{{ r.throws }}HP</span>
+          <ul class="flags">
+          {% for kind, text in r.notes %}
+            <li class="flag flag-{{ kind }}"><span aria-hidden="true">{{ '⚠' if kind == 'warn' else '✓' }}</span> {{ text }}</li>
+          {% endfor %}
+          </ul>
+        </td>
+        <td class="load">
+          <span class="nowrap">{% if r.rest == 0 %}Pitched yesterday{% else %}{{ r.rest }} day{{ 's' if r.rest != 1 }} rest{% endif %}</span><br>
+          <span class="note">Last out {{ r.last_label }} · {{ r.pitches3 }} pitches in 3 days ·
+            {{ r.apps7 }} outing{{ 's' if r.apps7 != 1 }} in 7 days</span>
+        </td>
+        <td class="num">{{ num(r.recent.velo if r.recent else none) }} / {{ num(r.season.velo if r.season else none) }}</td>
+        <td class="num">{{ pct(r.recent.whiff if r.recent else none) }} / {{ pct(r.season.whiff if r.season else none) }}</td>
+        <td class="num"><strong>{{ woba(r.expected) }}</strong></td>
+        <td class="num">{{ woba(r.vs_l) }} / {{ woba(r.vs_r) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Expected wOBA blends recent games with the 2-season baseline, so a few bad outings move it
+    only a little. Lower is better. Fastball = four-seam only; “—” means he doesn't throw one or hasn't pitched in that span.
+    Handedness splits cover the 2018–2020 regular seasons.</p>
+</section>
+{% endif %}
+{% endblock %}

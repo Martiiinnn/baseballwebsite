@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+{% set rows = result.rows %}
+<section class="hero">
+  <p class="eyebrow">Case study · 2020 World Series, Game 6</p>
+  <h1>Pull Blake Snell, or leave him in?</h1>
+  <p class="lede">Bottom of the 6th. The Rays lead 1–0 with one out and a runner on first.
+    Snell has struck out 9 on 73 pitches. Up next: Mookie Betts, Corey Seager and Justin Turner,
+    each about to face him for the third time. Kevin Cash went to the bullpen for Nick Anderson.</p>
+  <p class="lede">This site rebuilds what each member of the coaching staff could have known at that
+    moment, using only data available before the pitch.</p>
+</section>
+
+<section class="tiles" aria-label="Key numbers">
+  <div class="tile">
+    <span class="tile-label">Rays' chance to win when Snell left</span>
+    <span class="tile-value">{{ pct(pull.before) }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">After the next three batters</span>
+    <span class="tile-value">{{ pct(inning_end.after) }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Pressure of the moment (leverage)</span>
+    <span class="tile-value">{{ num(li, 1) }} <small>high</small></span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Rays win probability, batter by batter</h2>
+  <p class="note">Hover a step to see the plate appearance. The Dodgers won 3–1 and took the Series.</p>
+  <div class="chart-wrap">{{ chart }}</div>
+  <details class="table-view">
+    <summary>Biggest swings in the game</summary>
+    <table>
+      <thead><tr><th>Inning</th><th>Batter</th><th>Pitcher</th><th>Result</th><th class="num">Rays' chance</th><th class="num">Change</th></tr></thead>
+      <tbody>
+      {% for r in swings %}
+        <tr><td>{{ 'Top' if r.half == 'Top' else 'Bot' }} {{ r.inning }}</td><td>{{ r.batter }}</td><td>{{ r.pitcher }}</td>
+            <td>{{ r.event }}</td><td class="num">{{ pct(r.before) }} → {{ pct(r.after) }}</td>
+            <td class="num">{{ signed(r.change * 100, 0) }} pts</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
+
+<h2 class="section-title">What each coach would have seen</h2>
+<section class="cards">
+  {% set velo = card.rows[0][1] %}{% set whiff = card.rows[2][1] %}
+  <article class="card">
+    <p class="card-role">Pitching coach</p>
+    <h3>Snell's stuff was real, but dominant starts still fade.</h3>
+    <ul>
+      <li>Fastball {{ num(velo.today) }} mph vs. {{ num(velo.season) }} in the regular season.</li>
+      <li>Hitters missed on {{ pct(whiff.today) }} of swings vs. {{ pct(whiff.season) }} normally.</li>
+      <li>In {{ similar.starts }} starts this dominant (2018–2020), hitters still posted a
+        {{ woba(similar.woba) }} wOBA the third time through. The average third time through: {{ woba(everyone.woba) }}.</li>
+    </ul>
+    <a class="card-link" href="{{ url_for('pitching_coach') }}">Open the pitching coach page →</a>
+  </article>
+
+  <article class="card">
+    <p class="card-role">Bullpen coach</p>
+    <h3>Anderson's arm looked fine. His results didn't.</h3>
+    <ul>
+      <li>Fastball {{ num(rel.recent.velo) }} mph this postseason vs. {{ num(rel_season.velo) }} in the regular season.</li>
+      <li>But hitters missed on only {{ pct(rel.recent.whiff) }} of swings, down from {{ pct(rel_season.whiff) }}.</li>
+      <li>{{ rel.recent.games }} outings in the postseason, and his expected wOBA allowed was {{ woba(rel.recent.xwoba) }}.</li>
+    </ul>
+    <a class="card-link" href="{{ url_for('bullpen') }}">Open the bullpen board →</a>
+  </article>
+
+  <article class="card">
+    <p class="card-role">Manager</p>
+    <h3>A close call with a lopsided downside.</h3>
+    <ul>
+      <li>If Anderson was at full strength, pulling Snell added {{ num(rows[0].points) }} points of win probability.</li>
+      <li>If his October form was real, it cost {{ num(-rows[2].points) }} points.</li>
+      <li>Pulling only pays off if you're at least {{ pct(result.confidence_needed) }} sure Anderson is his full-strength self.</li>
+    </ul>
+    <a class="card-link" href="{{ url_for('manager') }}">Try the pull-or-stay tool →</a>
+  </article>
+</section>
+
+<section class="panel callout">
+  <h2>Judge the decision, not the outcome</h2>
+  <p>Before the pitch, the move was worth somewhere between {{ signed(rows[0].points) }} and
+    {{ signed(rows[2].points) }} points of win probability. The next three batters moved the Rays' chances by
+    {{ signed((inning_end.after - pull.before) * 100, 0) }} points. One inning that big can't tell you whether
+    the call was right. The expected value can: it was a reasonable move that leaned on a reliever already
+    showing warning signs.</p>
+</section>
+
+<section class="panel method">
+  <h2>How the numbers are built</h2>
+  <dl>
+    <dt>Data</dt>
+    <dd>Every pitch from the 2018–2020 regular seasons and the 2020 postseason (Statcast via pybaseball),
+      loaded into SQLite and checked 10 ways before use, including matching Snell's official Game 6 box score.</dd>
+    <dt>Starter</dt>
+    <dd>Regular-season starts where the pitcher was at least this dominant through two times
+      ({{ ((card.manager_link.k_min * 100) | round | int) }}%+ strikeouts, wOBA ≤ {{ woba(card.manager_link.woba_max) }},
+      ≤ {{ card.manager_link.pitch_max }} pitches), and how hitters did the third time through.</dd>
+    <dt>Reliever</dt>
+    <dd>Three versions of Anderson: full strength (2019–20 regular seasons), recent form (this postseason
+      blended with full strength) and recent form taken at face value. Small samples are blended with
+      300 plate appearances of the baseline.</dd>
+    <dt>Win probability</dt>
+    <dd>Expected wOBA difference over 3 batters ÷ 1.2 = runs; runs × leverage ÷ 10 = wins.
+      Accounting for each hitter's handedness gives nearly the same answer (+1.7 / +0.7 / −4.7).</dd>
+  </dl>
+</section>
+{% endblock %}

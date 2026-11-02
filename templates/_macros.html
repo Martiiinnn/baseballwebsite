@@ -1,0 +1,13 @@
+{% macro team_date_form(endpoint, teams, team, day, span, date_label="Date") %}
+<form class="controls" method="get" action="{{ url_for(endpoint) }}">
+  <label>Team
+    <select name="team">
+      {% for t in teams %}<option value="{{ t }}" {% if t == team %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>{{ date_label }}
+    <input type="date" name="date" value="{{ day }}" min="{{ span[0] }}" max="{{ span[1] }}">
+  </label>
+  <button type="submit">Show</button>
+</form>
+{% endmacro %}

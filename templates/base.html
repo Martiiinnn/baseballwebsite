@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Pull or Stay{% endblock %} · Pull or Stay</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="{{ url_for('overview') }}">Pull or Stay</a>
+      <nav aria-label="Pages">
+        <a href="{{ url_for('overview') }}" {% if active == 'overview' %}aria-current="page"{% endif %}>Overview</a>
+        <a href="{{ url_for('manager') }}" {% if active == 'manager' %}aria-current="page"{% endif %}>Manager</a>
+        <a href="{{ url_for('pitching_coach') }}" {% if active == 'pitching' %}aria-current="page"{% endif %}>Pitching coach</a>
+        <a href="{{ url_for('bullpen') }}" {% if active == 'bullpen' %}aria-current="page"{% endif %}>Bullpen coach</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="wrap site-footer">
+    Statcast data 2018–2020 via pybaseball · Built for the Penn State Sports Analytics Club project cohort
+  </footer>
+</body>
+</html>

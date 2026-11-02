@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Manager{% endblock %}
+{% block content %}
+<section class="hero compact">
+  <p class="eyebrow">Manager</p>
+  <h1>Pull or stay?</h1>
+  <p class="lede">Compare your starter's likely third time through the order with a reliever,
+    and see what the change is worth in win probability. Defaults are the Snell decision in Game 6.</p>
+</section>
+
+{% if result %}
+{% set rows = result.rows %}
+<section class="verdict verdict-{{ result.verdict }}" aria-live="polite">
+  {% if result.verdict == 'pull' %}
+    <p class="verdict-head"><span class="icon" aria-hidden="true">↗</span> Pull him: the reliever is the better bet in every scenario.</p>
+  {% elif result.verdict == 'stay' %}
+    <p class="verdict-head"><span class="icon" aria-hidden="true">✋</span> Leave him in: even a full-strength {{ rel_name }} doesn't beat him.</p>
+  {% else %}
+    <p class="verdict-head"><span class="icon" aria-hidden="true">⚖</span> It depends on {{ rel_name }}.</p>
+    <p>Pulling helps by {{ num(rows[0].points) }} points if he's at full strength, but costs {{ num(-rows[2].points) }}
+      if his form {{ rel.recent_label }} is real. It's the right call only if you're at least
+      <strong>{{ pct(result.confidence_needed) }}</strong> sure he's at full strength.</p>
+  {% endif %}
+</section>
+
+<section class="tiles" aria-label="Inputs to the decision">
+  <div class="tile">
+    <span class="tile-label">Your starter, third time through (expected wOBA)</span>
+    <span class="tile-value">{{ woba(starts.woba) }} <small>± {{ woba(starts.ci) }}</small></span>
+    <span class="tile-foot">From {{ starts.starts }} similar starts{% if starts.pa < 300 %} · <strong>small sample</strong>{% endif %}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Pressure of the moment (leverage)</span>
+    <span class="tile-value">{{ num(li, 2) }} <small>{{ li_label }}</small></span>
+    <span class="tile-foot">1.0 = an average plate appearance</span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>If you bring in {{ rel_name }}</h2>
+  <div class="table-wrap">
+  <table class="stack">
+    <thead>
+      <tr><th>Which {{ rel_name }} shows up?</th><th class="num">Expected wOBA</th>
+          <th class="num">vs. your starter</th><th class="num">Win probability if you pull</th></tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="first"><strong>{{ r.name }}</strong><br><span class="note">{{ r.basis }}</span></td>
+        <td class="num" data-label="Expected wOBA">{{ woba(r.xwoba) }}</td>
+        <td class="num" data-label="vs. your starter">{{ 'better' if r.gap > 0 else 'worse' }} by {{ woba(r.gap | abs) }}</td>
+        <td class="num {{ 'pos' if r.points > 0 else 'neg' }}" data-label="Win probability if you pull">
+          <span aria-hidden="true">{{ '▲' if r.points > 0 else '▼' }}</span> {{ signed(r.points) }} pts</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="note">Lower wOBA is better for the pitcher. Over {{ form.batters }} batters, each .001 of wOBA is worth
+    about {{ num(form.batters / 1.2 * li / 10 / 10, 2) }} points of win probability at this leverage.</p>
+</section>
+{% else %}
+<section class="panel"><p>Not enough data for these settings. Try loosening the starter filters or picking another date.</p></section>
+{% endif %}
+
+<form class="panel form-grid" method="get" action="{{ url_for('manager') }}">
+  <input type="hidden" name="s" value="1">
+  <fieldset>
+    <legend>Your starter, first two times through</legend>
+    <label>Strikeout rate at least (%)
+      <input type="number" name="k_min" value="{{ form.k_min }}" min="0" max="100" step="1"></label>
+    <label>wOBA allowed at most
+      <input type="number" name="woba_max" value="{{ '%.3f' % form.woba_max }}" min="0" max="2" step="0.005"></label>
+    <label>Pitches at most
+      <input type="number" name="pitch_max" value="{{ form.pitch_max }}" min="1" max="200"></label>
+    <p class="note">Snell in Game 6: 50% strikeouts, .100 wOBA, 73 pitches. The defaults find starts at least roughly that dominant.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Reliever</legend>
+    <label>Team
+      <select name="team">{% for t in teams %}<option value="{{ t }}" {% if t == team %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Game date
+      <input type="date" name="date" value="{{ day }}" min="{{ span[0] }}" max="{{ span[1] }}"></label>
+    <label>Reliever
+      <select name="reliever">
+        {% for r in options %}<option value="{{ r.pitcher }}" {% if r.pitcher == form.reliever %}selected{% endif %}>{{ r.name }} ({{ r.throws }}HP)</option>{% endfor %}
+      </select></label>
+    <p class="note">Changed the team or date? Press Update to refresh the reliever list.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Game situation</legend>
+    <div class="inline">
+      <label>We're pitching in the
+        <select name="half">
+          <option value="Top" {% if form.half == 'Top' %}selected{% endif %}>top</option>
+          <option value="Bot" {% if form.half == 'Bot' %}selected{% endif %}>bottom</option>
+        </select></label>
+      <label>of inning
+        <input type="number" name="inning" value="{{ form.inning }}" min="1" max="9"></label>
+    </div>
+    <label>Outs
+      <select name="outs">{% for o in range(3) %}<option value="{{ o }}" {% if o == form.outs %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></label>
+    <div class="checks" role="group" aria-label="Runners on base">
+      <span>Runners on</span>
+      <label><input type="checkbox" name="on1" {% if form.on1 %}checked{% endif %}> 1st</label>
+      <label><input type="checkbox" name="on2" {% if form.on2 %}checked{% endif %}> 2nd</label>
+      <label><input type="checkbox" name="on3" {% if form.on3 %}checked{% endif %}> 3rd</label>
+    </div>
+    <label>Our lead in runs (negative if behind)
+      <input type="number" name="lead" value="{{ form.lead }}" min="-10" max="10"></label>
+    <label>Batters this decision affects
+      <input type="number" name="batters" value="{{ form.batters }}" min="1" max="9"></label>
+  </fieldset>
+
+  <div class="form-actions"><button type="submit">Update</button>
+    <a href="{{ url_for('manager') }}">Reset to Game 6</a></div>
+</form>
+
+<details class="panel method">
+  <summary>How this is calculated</summary>
+  <p>The starter's number is how hitters did the third time through in 2018–2020 regular-season starts
+    that met all three filters above. The reliever's numbers use only games before the date you pick.
+    The difference in expected wOBA, times the batters affected, divided by 1.2 gives runs; runs times
+    leverage divided by 10 gives wins. Handedness matchups aren't included here.</p>
+</details>
+{% endblock %}
