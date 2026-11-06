@@ -28,6 +28,11 @@ Each page puts its key numbers first. Explanations sit behind ⓘ tips so coache
 | **Mound Visit** | pitching coach | Today's starter vs. his season (velocity, spin, whiff rate, strikeouts, xwOBA) and how starts like this go the third time through |
 | **Bullpen Board** | bullpen coach | Every recent reliever, sorted by projected xwOBA, with rest, workload, velocity drops and a strikeout warning when he may have changed |
 
+<p>
+  <img src="docs/the-hook.jpg" alt="The Hook for Game 6: +1.9 if Anderson is unchanged, −1.9 if he has changed, −1.3 expected; 9 strikeouts vs 19.7 expected" width="49%">
+  <img src="docs/bullpen-board.jpg" alt="Bullpen Board before Game 6, with Anderson flagged: strikeouts 9 vs 20 expected, 86% he has changed" width="49%">
+</p>
+
 ## What the data says about Game 6
 
 - **Snell's stuff was real.** His four-seam fastball averaged 96.3 mph (95.0 in the 2020 regular season) and hitters missed on
