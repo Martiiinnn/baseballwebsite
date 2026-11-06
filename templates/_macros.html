@@ -11,3 +11,27 @@
   <button type="submit">Show</button>
 </form>
 {% endmacro %}
+
+{# A small "i" that opens a short explanation when tapped, so the page itself can stay data only.
+   Usage:  {% call info("About leverage") %}Explanation text{% endcall %}  #}
+{% macro info(label="What this means") -%}
+<details class="info"><summary aria-label="{{ label }}" title="{{ label }}"><span class="i" aria-hidden="true">i</span></summary><div class="tip" role="note">{{ caller() }}</div></details>
+{%- endmacro %}
+
+{# Team cap logo, swapped for the dark-background version in dark mode. Decorative: the team code is always written next to it.
+   If the tablet is offline, the logo just disappears instead of showing a broken-image icon. #}
+{% macro team_logo(team, size=20) -%}
+{% if logo(team) %}<picture class="logo"><source media="(prefers-color-scheme: dark)" srcset="{{ logo(team, 'dark') }}"><img src="{{ logo(team) }}" alt="" width="{{ size }}" height="{{ size }}" onerror="this.style.visibility='hidden'"></picture>{% endif %}
+{%- endmacro %}
+
+{# Round player headshot. Decorative: the player's name is always written next to it.
+   If the tablet is offline, it falls back to a plain grey circle. #}
+{% macro face(player_id, size=48) -%}
+<img class="face" src="{{ headshot(player_id) }}" alt="" width="{{ size }}" height="{{ size }}" loading="lazy"
+     onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
+{%- endmacro %}
+
+{# Link to the game on Baseball Savant, where every pitch has a video clip. Opens in a new tab. #}
+{% macro film_link(game_pk) -%}
+<a class="film" href="{{ game_film(game_pk) }}" target="_blank" rel="noopener">Game film<span class="visually-hidden"> on Baseball Savant (opens in a new tab)</span> ↗</a>
+{%- endmacro %}

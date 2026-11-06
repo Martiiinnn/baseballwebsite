@@ -256,11 +256,11 @@ def starter_card(con, team, on_or_before):
     early_k = ratio(early["early_k"], early["early_pa"]) if early else None
     early_w = ratio(early["early_woba_sum"], early["early_pa"]) if early else None
     rows = [
-        ("Four-seam velocity (mph)", compare("velo", True, 0.5), "{:.1f}".format),
-        ("Four-seam spin (rpm)", compare("spin", True, 50), "{:.0f}".format),
-        ("Whiff rate (misses per swing)", compare("whiff", True, 0.04), "{:.0%}".format),
+        ("Velocity (mph)", compare("velo", True, 0.5), "{:.1f}".format),
+        ("Spin (rpm)", compare("spin", True, 50), "{:.0f}".format),
+        ("Whiff rate", compare("whiff", True, 0.04), "{:.0%}".format),
         ("Strikeout rate", compare("k_pct", True, 0.04), "{:.0%}".format),
-        ("Expected wOBA allowed (lower is better)", compare("xwoba", False, 0.025),
+        ("Expected wOBA", compare("xwoba", False, 0.025),
          lambda v: f"{v:.3f}".lstrip("0")),
     ]
     measured = [c for _, c, _ in rows if c]

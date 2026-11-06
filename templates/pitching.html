@@ -1,65 +1,69 @@
 {% extends "base.html" %}
-{% from "_macros.html" import team_date_form %}
-{% block title %}Pitching coach{% endblock %}
+{% from "_macros.html" import team_date_form, info, team_logo, face, film_link %}
+{% block title %}Mound Visit{% endblock %}
 {% block content %}
-<section class="hero compact">
-  <p class="eyebrow">Pitching coach</p>
-  <h1>Is today's starter really better than usual?</h1>
-  <p class="lede">Today's outing next to his regular season so far. Stuff (velocity, spin, misses) is
-    a more trustworthy signal than results over a few innings.</p>
-</section>
-
-{{ team_date_form('pitching_coach', teams, team, day, span, "Game on or before") }}
+<header class="page-head">
+  <div class="title-row">
+    {% if card %}{{ face(card.pitcher, 64) }}{% endif %}
+    <div>
+      <h1>Mound Visit</h1>
+      {% if card %}
+      <p class="context">{{ card.name }} ({{ card.throws }}HP) · {{ team_logo(team) }} {{ team }} vs
+        {{ team_logo(card.game.opponent) }} {{ card.game.opponent }} · {{ date_label(card.game.game_date) }} ·
+        {{ card.round }} · {{ card.today.pitches }} pitches, {{ card.today.pa }} batters · {{ film_link(card.game.game_pk) }}</p>
+      {% endif %}
+    </div>
+  </div>
+  {{ team_date_form('mound_visit', teams, team, day, span, "Game on or before") }}
+</header>
 
 {% if not card %}
 <section class="panel"><p>No start found for {{ team }} on or before {{ day }}.</p></section>
 {% else %}
-<section class="panel">
-  <p class="eyebrow">{{ card.game.game_date }} · vs {{ card.game.opponent }} · {{ card.round }}</p>
-  <h2 class="big">{{ card.name }} <small>{{ card.throws }}HP</small></h2>
-  <p class="verdict-line">Better than usual on <strong>{{ card.better }} of {{ card.measured }}</strong> measures.</p>
-  <div class="table-wrap">
-  <table class="stack">
-    <thead><tr><th>Measure</th><th class="num">Today</th><th class="num">{{ card.season }} season</th><th>Read</th></tr></thead>
-    <tbody>
-    {% for label, c, fmt in card.rows %}
-      <tr>
-        <td class="first"><strong>{{ label }}</strong></td>
-        {% if c %}
-          <td class="num" data-label="Today">{{ fmt(c.today) }}</td>
-          <td class="num" data-label="{{ card.season }} season">{{ fmt(c.season) }}</td>
-          <td class="read read-{{ c.label.split(' ')[0] }}" data-label="Read">
-            <span aria-hidden="true">{{ '▲' if c.label.startswith('better') else ('▼' if c.label.startswith('worse') else '•') }}</span>
-            {{ c.label }}</td>
-        {% else %}
-          <td class="num">—</td><td class="num">—</td><td class="note">not enough data</td>
-        {% endif %}
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+<div class="section-label"><h2>Today vs {{ card.season }} regular season</h2>
+  {% call info("About these numbers") %}Today is the whole outing ({{ card.today.pitches }} pitches,
+    {{ card.today.pa }} batters). Season is regular-season games before this date. Velocity and spin are
+    four-seam fastballs only. Whiff rate is misses per swing. Lower expected wOBA is better for the pitcher. "Better" or "worse than usual" needs a gap of at least 0.5 mph, 50 rpm,
+    4 points of whiff or strikeout rate, or .025 of expected wOBA.{% endcall %}</div>
+<section class="big-grid measures">
+  {% for label, c, fmt in card.rows %}
+  <div class="tile">
+    <span class="tile-label">{{ label }}</span>
+    {% if c %}
+      <span class="big-value">{{ fmt(c.today) }}</span>
+      <span class="tile-foot">Season {{ fmt(c.season) }}</span>
+      <span class="read read-{{ c.label.split(' ')[0] }}">
+        <span aria-hidden="true">{{ '▲' if c.label.startswith('better') else ('▼' if c.label.startswith('worse') else '•') }}</span>
+        {{ c.label }}</span>
+    {% else %}
+      <span class="big-value">—</span>
+      <span class="tile-foot">not enough data</span>
+    {% endif %}
   </div>
-  <p class="note">Today = the whole outing ({{ card.today.pitches }} pitches, {{ card.today.pa }} batters).
-    Season = regular-season games before this date. Velocity and spin are four-seam fastballs only.</p>
+  {% endfor %}
 </section>
 
-<section class="cards two">
-  <article class="card">
-    <p class="card-role">His own pattern this season</p>
-    <h3>First two times through: {{ woba(card.tto.early) }} wOBA. Third time: {{ woba(card.tto.third) }}.</h3>
-    <p>Across {{ card.tto.starts }} regular-season starts.
-      {% if card.tto.third_pa < 60 %}Only {{ card.tto.third_pa }} third-time plate appearances, so treat it as a hint, not a rule.{% endif %}</p>
-  </article>
+<section class="tiles" aria-label="Third time through the order">
+  <div class="tile">
+    <span class="tile-label">His third time through, {{ card.season }}
+      {% call info("About his own pattern") %}wOBA hitters posted against him the third time through the order
+        in his {{ card.tto.starts }} regular-season starts before this date.
+        {% if card.tto.third_pa < 60 %}Only {{ card.tto.third_pa }} plate appearances, so treat it as a hint, not a rule.{% endif %}{% endcall %}</span>
+    <span class="tile-value">{{ woba(card.tto.third) }}</span>
+    <span class="tile-foot">First two times {{ woba(card.tto.early) }} · {{ card.tto.third_pa }} PA</span>
+  </div>
   {% if similar and similar.woba is not none %}
-  <article class="card">
-    <p class="card-role">Starts this dominant usually cool off</p>
-    <h3>{{ similar.starts }} similar starts allowed a {{ woba(similar.woba) }} wOBA the third time through.</h3>
-    <p>Today through two times: {{ pct(card.early_k) }} strikeouts, {{ woba(card.early_woba) }} wOBA.
-      Early dominance is partly luck, so the third time usually looks closer to average.</p>
-    <a class="card-link" href="{{ url_for('manager', k_min=(card.manager_link.k_min * 100) | round | int,
-        woba_max=card.manager_link.woba_max, pitch_max=card.manager_link.pitch_max, team=team, date=card.game.game_date) }}">
-      Compare with a reliever →</a>
-  </article>
+  <div class="tile">
+    <span class="tile-label">Starts this dominant, third time through
+      {% call info("Starts this dominant") %}2018–2020 regular-season starts with at least
+        {{ ((card.manager_link.k_min * 100) | round | int) }}% strikeouts, a wOBA of {{ woba(card.manager_link.woba_max) }} or lower
+        and {{ card.manager_link.pitch_max }} pitches or fewer through two times.
+        Today through two times: {{ pct(card.early_k) }} strikeouts, {{ woba(card.early_woba) }} wOBA.{% endcall %}</span>
+    <span class="tile-value">{{ woba(similar.woba) }}</span>
+    <span class="tile-foot">{{ similar.starts }} starts ·
+      <a href="{{ url_for('hook', k_min=(card.manager_link.k_min * 100) | round | int,
+        woba_max=card.manager_link.woba_max, pitch_max=card.manager_link.pitch_max, team=team, date=card.game.game_date) }}">Compare with a reliever →</a></span>
+  </div>
   {% endif %}
 </section>
 {% endif %}

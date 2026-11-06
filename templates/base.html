@@ -8,14 +8,18 @@
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
-  <header class="site-header">
+  {# The header is the one place the team's colour appears. #}
+  {% set shown = team | default('TB') %}{% set tc = team_color(shown) %}
+  <header class="site-header on-{{ tc.on }}" style="--team: {{ tc.bg }}; --on-team: {{ tc.fg }};">
     <div class="wrap header-row">
-      <a class="brand" href="{{ url_for('overview') }}">Pull or Stay</a>
+      <a class="brand" href="{{ url_for('game6_review') }}">
+        {% if logo(shown) %}<img src="{{ logo(shown, tc.on) }}" alt="" width="32" height="32" onerror="this.style.visibility='hidden'">{% endif %}
+        Pull or Stay</a>
       <nav aria-label="Pages">
-        <a href="{{ url_for('overview') }}" {% if active == 'overview' %}aria-current="page"{% endif %}>Overview</a>
-        <a href="{{ url_for('manager') }}" {% if active == 'manager' %}aria-current="page"{% endif %}>Manager</a>
-        <a href="{{ url_for('pitching_coach') }}" {% if active == 'pitching' %}aria-current="page"{% endif %}>Pitching coach</a>
-        <a href="{{ url_for('bullpen') }}" {% if active == 'bullpen' %}aria-current="page"{% endif %}>Bullpen coach</a>
+        <a href="{{ url_for('game6_review') }}" {% if active == 'game6' %}aria-current="page"{% endif %}>Game 6 Review</a>
+        <a href="{{ url_for('hook') }}" {% if active == 'hook' %}aria-current="page"{% endif %}>The Hook</a>
+        <a href="{{ url_for('mound_visit') }}" {% if active == 'mound' %}aria-current="page"{% endif %}>Mound Visit</a>
+        <a href="{{ url_for('bullpen') }}" {% if active == 'bullpen' %}aria-current="page"{% endif %}>Bullpen Board</a>
       </nav>
     </div>
   </header>
@@ -25,7 +29,36 @@
   </main>
 
   <footer class="wrap site-footer">
-    Statcast data 2018–2020 via pybaseball · Built for the Penn State Sports Analytics Club project cohort
+    Statcast data 2018–2020 via pybaseball · Player photos and team logos © MLB ·
+    Built for the Penn State Sports Analytics Club project cohort
   </footer>
+  <script>
+    // "i" tips: one open at a time, close on a tap elsewhere or Escape, and keep each tip on screen.
+    (function () {
+      var tips = Array.prototype.slice.call(document.querySelectorAll("details.info"));
+      function closeAll(except) {
+        tips.forEach(function (d) { if (d !== except) d.open = false; });
+      }
+      document.addEventListener("click", function (e) { closeAll(e.target.closest("details.info")); });
+      document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAll(null); });
+      // On a phone the chart scrolls sideways: start it at the decision point, not the 1st inning.
+      document.querySelectorAll(".chart-wrap").forEach(function (w) {
+        var m = w.querySelector(".marker");
+        if (!m || w.scrollWidth <= w.clientWidth) return;
+        w.scrollLeft = m.getBoundingClientRect().left - w.getBoundingClientRect().left - w.clientWidth * 0.6;
+      });
+      tips.forEach(function (d) {
+        d.addEventListener("toggle", function () {
+          var tip = d.querySelector(".tip");
+          tip.style.transform = "";
+          if (!d.open) return;
+          var r = tip.getBoundingClientRect(), pad = 12, shift = 0;
+          if (r.left < pad) shift = pad - r.left;
+          else if (r.right > window.innerWidth - pad) shift = window.innerWidth - pad - r.right;
+          if (shift) tip.style.transform = "translateX(calc(-50% + " + shift + "px))";
+        });
+      });
+    })();
+  </script>
 </body>
 </html>

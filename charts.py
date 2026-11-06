@@ -2,15 +2,16 @@
 Colors come from CSS variables, so the chart follows the page's light/dark theme."""
 from markupsafe import Markup, escape
 
-W, H = 960, 300
+W, DEFAULT_H = 960, 300
 LEFT, RIGHT, TOP, BOTTOM = 52, 16, 20, 44
 
 
-def win_prob_svg(rows, team, mark_ab=None, mark_label=""):
+def win_prob_svg(rows, team, mark_ab=None, mark_label="", height=DEFAULT_H):
     """Step line of the team's win probability, one step per plate appearance.
     Hovering a step shows who batted, what happened and how the odds moved."""
     if not rows:
         return Markup("")
+    H = height
     n = len(rows)
     p = [r["before"] for r in rows] + [rows[-1]["after"]]
     pw, ph = W - LEFT - RIGHT, H - TOP - BOTTOM
