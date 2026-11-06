@@ -24,12 +24,12 @@ Each page puts its key numbers first. Explanations sit behind ⓘ tips so coache
 | Page | Built for | What it shows |
 |---|---|---|
 | **Game 6 Review** | everyone | Rays win probability batter by batter, the numbers around the pull, and the other three pages' view of that moment |
-| **The Hook** | manager | Win-probability change from pulling the starter if the reliever is unchanged, if he has changed, and the expected value. Any team, date, reliever and game situation. Lists the data each input uses |
+| **The Hook** | manager | The rest of the half inning, simulated: your chance to win if you pull now, let the starter face one more hitter and decide again, or let him finish, for the reliever unchanged, changed and expected. Any team, date, reliever and game situation; postseason games use the real lineup. Lists the data each input uses |
 | **Mound Visit** | pitching coach | Today's starter vs. his season (velocity, spin, whiff rate, strikeouts, xwOBA) and how starts like this go the third time through |
 | **Bullpen Board** | bullpen coach | Every recent reliever, sorted by projected xwOBA, with rest, workload, velocity drops and a strikeout warning when he may have changed |
 
 <p>
-  <img src="docs/the-hook.jpg" alt="The Hook for Game 6: +1.9 if Anderson is unchanged, −1.9 if he has changed, −1.3 expected; 9 strikeouts vs 19.7 expected" width="49%">
+  <img src="docs/the-hook.jpg" alt="The Hook for Game 6: +1.4 if Anderson is unchanged, −1.3 if he has changed, −1.0 expected; pull now 57.6%, let Snell finish 58.5%" width="49%">
   <img src="docs/bullpen-board.jpg" alt="Bullpen Board before Game 6, with Anderson flagged: strikeouts 9 vs 20 expected, 86% he has changed" width="49%">
 </p>
 
@@ -43,16 +43,18 @@ Each page puts its key numbers first. Explanations sit behind ⓘ tips so coache
 - **Anderson's strikeouts had disappeared.** His velocity held (95.7 mph in the postseason vs. 95.2), but he struck out
   **9 of 57** postseason hitters. Against those hitters, who strike out less than average, his history predicted **19.7**
   (2.8 standard deviations more than he got). That moves the chance his talent had changed from a 10% starting point to **86%**.
-- **Value of the pull over the next three batters** (leverage 2.47):
+- **The rest of the inning, simulated** against the Dodgers' lineup from Mookie Betts (see *Game-state simulation* below):
 
-  | If Anderson is… | His projected xwOBA | Win-probability change from pulling |
-  |---|---|---|
-  | unchanged (all his games) | .265 ± .025 | **+1.9 points** |
-  | changed (postseason only) | .325 ± .039 | **−1.9 points** |
-  | expected (86% changed) | | **−1.3 points** |
+  | If Anderson is… | Rays' chance to win: pull now | Snell finishes the inning | Pulling now |
+  |---|---|---|---|
+  | unchanged (all his games) | 59.9% | 58.5% | **+1.4 points** |
+  | changed (postseason only) | 57.2% | 58.5% | **−1.3 points** |
+  | expected (86% changed) | 57.6% | 58.5% | **−1.0 points** |
 
-  Pulling comes out ahead only if the chance he has changed is below **50%**. The chance pulling was better, counting the
-  uncertainty in both pitchers' numbers: **20%**.
+  Pulling comes out ahead only if the chance he has changed is below **51%**. Counting the uncertainty in both pitchers' and the
+  hitters' numbers, the chance pulling was better is **20%** (90% range −3.5 to +1.8 points). **Letting Snell face Betts and
+  deciding again adds nothing**, whatever you believe about Anderson, and the best possible timing adds at most 0.1 point:
+  Betts, a right-handed hitter, was Anderson's best matchup, so if you were going to pull Snell, it was before Betts. A simpler three-batter formula gives +1.9 / −1.9 / −1.3.
 - **What actually happened:** the Rays' win probability went from 60% to 31% over those three batters. One inning is far noisier
   than the estimate: the wOBA of three batters has a spread of about .30, against ± .015 for the starter's number. That is
   why the decision is judged before the pitch, not after.
@@ -67,7 +69,8 @@ A review in November 2026 challenged the first version. Each fix is reproduced b
 | Starter in xwOBA too | +0.8 / −0.2 / −5.6; pull if at least 87% sure | The starter used actual wOBA, the reliever expected wOBA. Using the same measure on both sides moved the middle case from + to − |
 | Each component with its own constant | +1.8 if unchanged, −2.2 if changed | One constant (300) for overall xwOBA was replaced by separate constants estimated from the data |
 | Change test on strikeouts | 98% changed, expected −2.2 | "How sure are you?" is now estimated from his strikeouts instead of asked |
-| Adjusted for the hitters he faced (current site) | 86% changed, expected **−1.3** | Postseason hitters strike out less, which explains part of the drop |
+| Adjusted for the hitters he faced | 86% changed, expected −1.3 | Postseason hitters strike out less, which explains part of the drop |
+| Game-state simulation (current site) | +1.4 if unchanged, −1.3 if changed, expected **−1.0**; facing Betts first adds nothing | The fixed conversions (÷ 1.2, ÷ 10, three batters) were replaced by simulating the rest of the inning against the real lineup |
 
 The 72% in the first version was never the chance Anderson was healthy. It was the weight between two scenario endpoints,
 and the data never measured how he felt that night. The current version replaces it with a probability estimated from his
@@ -139,6 +142,37 @@ Three batters, because since 2020 a reliever must face at least three (or finish
 **Leverage index:** the average absolute change in win probability for plate appearances in the same inning, half, outs, bases and
 score margin (2018–2020 regular seasons), divided by the average for all plate appearances.
 
+### Game-state simulation
+
+`sim.py` solves the rest of the half inning exactly: every plate appearance and every base-out state, weighted by its chance.
+
+1. **Outcome chances for each matchup.** Seven results: strikeout, walk (incl. hit by pitch), single, double, triple, home run, and
+   out (every other ball in play). The pitcher's and the hitter's rates are combined with the odds-ratio method:
+   `p(result) ∝ pitcher rate × hitter rate ÷ league rate`. Each hitter gets his overall rates plus the league's platoon effect,
+   because individual platoon splits are mostly noise at these sample sizes.
+2. **What each result does.** `pa_transitions` holds, for every combination of outs, runners and result, the outs, runners and runs
+   that followed in 2018–2020, so double plays, sacrifice flies, errors and runners taking an extra base are all in it.
+   `build_database.py` checks that 99.99% of these add up (runners + batter = runners after + runs + new outs).
+3. **The end of the half inning.** The team's chance to win at the start of the next half inning for each score margin
+   (`win_expectancy`, Statcast's model averaged over 2018–2020). After that, both teams are treated as average.
+4. **Three choices.** Pull now; let the starter face one more hitter, then take the better choice; let him finish. Plus the best
+   possible timing (pull before any hitter). The reliever's two versions are weighted by P(changed).
+5. **Uncertainty.** 200 draws that resample the comparable starts by pitcher and draw each pitcher's and hitter's rates from
+   their posteriors, with the reliever's version drawn by P(changed).
+
+**Validation** (`analysis/game6_simulation.py`):
+
+- With league-average players, the model reproduces real run expectancy for all 24 base-out states within 0.02 runs per inning on
+  average. It runs about 0.1 run low with a runner on third, because it uses the same outcome chances in every situation.
+- With league-average players, the Rays' chance to win at the moment of the pull comes out **59.9%, the same as Statcast's model**.
+  Against the real Dodgers lineup it is 57.7%: the lineup was better than average, which Statcast's model doesn't know.
+
+| Belief that Anderson changed | Pull now | Face Betts, then decide | Snell finishes | Facing Betts first, vs. the better of the other two |
+|---|---|---|---|---|
+| 0% | 59.9% | 59.2% | 58.5% | −0.7 points |
+| 50% | 58.5% | 58.5% | 58.5% | 0.0 |
+| 86% (the data's estimate) | 57.6% | 58.5% | 58.5% | 0.0 |
+
 ### Backtest of the change test
 
 `analysis/backtest_reliever_change.py` puts a decision point before every relief appearance in the 2019–2020 regular seasons,
@@ -187,7 +221,7 @@ The Hook lists these for any date. Everything for Game 6 comes from games before
 
 ### Data checks
 
-`build_database.py` runs these before exporting anything. All 10 pass.
+`build_database.py` runs these before exporting anything. All 12 pass.
 
 | Check | Result |
 |---|---|
@@ -201,14 +235,17 @@ The Hook lists these for any date. Everything for Game 6 comes from games before
 | Snell's Game 6 matches the box score | 73 pitches / 18 BF / 9 K / 2 H / 0 BB |
 | Win probability chains from one plate appearance to the next | mean gap 0.0001 |
 | SQL tables reproduce the pandas analysis | 8,079 starts / .349 and 476 starts / .311 (wOBA) |
+| Transitions add up (runners + batter = runners after + runs + new outs) | 99.99% of 336,205 plate appearances |
+| Run expectancy looks like baseball | 0 out, bases empty: 0.53 runs; 0 out, bases loaded: 2.40 |
 
 ## Limitations
 
-- **The decision is still a rule of thumb.** Runs and wins come from fixed conversions (÷ 1.2, ÷ 10) and a fixed three batters at
-  the starting leverage. Staying also keeps an option that pulling gives up: Snell could face Betts and the staff could decide again,
-  while Anderson must face three batters or finish the inning. That option isn't valued yet.
-- **Average hitters.** The Hook estimates against average hitters. Who is due up is not included; a handedness-only version
-  (`snell_matchups.py`, first version) moved the answer by about 0.1 point.
+- **The simulation stops at the end of the half inning.** After that both teams are treated as average, so bullpen depth for the
+  later innings isn't counted. The starter's outcome chances don't change within the third time through (no fatigue curve), and
+  the staff doesn't update its view of the reliever from his first hitters.
+- **Same outcome chances in every situation.** Real hitters and pitchers change approach with a runner on third; the model runs
+  about 0.1 run low there.
+- **Lineups only for postseason games.** For regular-season dates The Hook simulates an average lineup.
 - **The prior.** The backtest's log loss barely changes between priors in 2019, so 10% is a reasonable choice, not a precise one.
 - **The test uses strikeouts only.** Anderson's whiff rate also fell (35% to 22%), which isn't used. "Changed" means a fresh draw
   from the league's reliever talent, one choice among several.
@@ -221,10 +258,10 @@ The Hook lists these for any date. Everything for Game 6 comes from games before
 
 ## Next steps
 
-1. **Game-state simulation.** Outcome probabilities for each pitcher against each hitter (odds-ratio method), a Markov chain over
-   base-out states, and win probability by game state. Compare three strategies: pull now, let Snell face Betts and decide again,
-   let Snell face all three. This replaces the fixed conversions and values the option of deciding later.
-2. **2021–2025 data.** A bigger backtest for extreme strikeout drops, and date-limited splits and leverage.
+1. **2021–2025 data.** A bigger backtest for extreme strikeout drops, regular-season lineups for the simulation, and date-limited
+   splits and leverage.
+2. **Every pitching change, graded.** Run the simulation on each pitching change in the data to see how often managers' calls
+   matched the model, and whether the model's calls would have won more games.
 3. **Matchup matrix.** The next hitters vs. each available pitcher by handedness, zone and pitch type.
 
 ## Run it yourself
@@ -241,7 +278,8 @@ The analysis scripts also run on that database (standard library only):
 ```bash
 python3 analysis/estimate_regression_constants.py   # split-half reliability -> regression constants
 python3 analysis/backtest_reliever_change.py        # the change test, 2019 -> 2020
-python3 analysis/game6_checks.py                    # every Game 6 number in this README
+python3 analysis/game6_checks.py                    # the Game 6 numbers before the simulation
+python3 analysis/game6_simulation.py                # validation, the three choices and their uncertainty
 ```
 
 To rebuild everything from Statcast (the first run takes a while; later runs read from pybaseball's cache):
@@ -259,7 +297,8 @@ They write CSVs and a chart to `output/`. Tested with Python 3.9.
 
 ```
 app.py               Flask routes for the four pages
-model.py             projections, the change test and the pull decision
+model.py             projections, the change test and the simpler pull formula
+sim.py               game-state simulation of the rest of the half inning
 queries.py           data access: pitcher totals, leverage, the starter card, win probability
 charts.py            win-probability chart, drawn as SVG on the server
 mlb.py               team colours, logos, headshots and game-film links

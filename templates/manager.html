@@ -13,43 +13,64 @@
       {{ 'Top' if form.half == 'Top' else 'Bottom' }} {{ form.inning }} ·
       {{ form.outs }} out{{ 's' if form.outs != 1 }} ·
       {% if not runners %}bases empty{% elif runners | length == 3 %}bases loaded{% else %}runner{{ 's' if runners | length > 1 }} on {{ runners | join(' & ') }}{% endif %} ·
-      {% if form.lead > 0 %}up {{ form.lead }}{% elif form.lead < 0 %}down {{ -form.lead }}{% else %}tied{% endif %} ·
-      next {{ form.batters }} batter{{ 's' if form.batters != 1 }}</p>
+      {% if form.lead > 0 %}up {{ form.lead }}{% elif form.lead < 0 %}down {{ -form.lead }}{% else %}tied{% endif %}{% if simres and simres.lineup %} ·
+      {{ simres.lineup[simres.due_spot][2] }} due up{% endif %}</p>
   </div>
 </header>
 
-{% if result %}
-{% set r = rel %}
-<div class="section-label with-face">{{ face(r.pitcher, 40) }}<div><h2>Win probability change if you bring in {{ r.name }}</h2>
-  {% call info("About these numbers") %}How much pulling the starter changes your team's chance to win over the next
-    {{ form.batters }} batters. Both pitchers are measured in expected wOBA (xwOBA) using only games before the date;
-    lower is better for the pitcher. At this leverage each .010 of xwOBA is worth about {{ num(result.per_010, 2) }} points.
-    These are estimates against average hitters: who is due up is not included yet.{% endcall %}</div></div>
+{% if result and simres %}
+{% set r = rel %}{% set e = simres.strategies %}
+{% if simres.lineup %}{% set due_name = simres.lineup[simres.due_spot][2] %}{% endif %}
+<div class="section-label with-face">{{ face(r.pitcher, 40) }}<div><h2>Win probability change if you bring in {{ r.name }} now</h2>
+  {% call info("About these numbers") %}The rest of the half inning, solved plate appearance by plate appearance:
+    each pitcher's chances of a strikeout, walk, single, double, triple, home run or out against each hitter, what
+    each result does to the outs, runners and score (2018–2020 games), and your team's chance to win once the half
+    inning ends. {% if simres.lineup %}Hitters: the lineup from this game, starting with {{ due_name }}.{% else %}Hitters:
+    an average lineup (lineups are only in the data for postseason games).{% endif %} Only games before the date are used
+    for the pitchers.{% endcall %}</div></div>
 <section class="big-grid" aria-live="polite">
   <div class="tile">
     <span class="tile-label">If he's unchanged
-      {% call info("If he's unchanged") %}All of his games before the date ({{ r.history.pa + r.recent.pa }} plate appearances).
-        Strikeout rate, walk rate and contact quality are each pulled toward the league average, by 60, 130 and
-        600 events, because they become reliable at very different sample sizes. Projected xwOBA
-        {{ woba(r.stable) }} ± {{ woba(1.96 * r.stable_sd) }}.{% endcall %}</span>
-    <span class="big-value {{ 'pos' if result.stable > 0 else 'neg' }}">{{ signed(result.stable) }} <small>pts</small></span>
-    <span class="tile-foot">xwOBA {{ woba(r.stable) }} · starter {{ woba(starts.xwoba) }}</span>
+      {% call info("If he's unchanged") %}All of his games before the date ({{ r.history.pa + r.recent.pa }} plate
+        appearances). Strikeout rate, walk rate and the mix of other results are each pulled toward the league average,
+        by 60, 130 and 600 events, because they become reliable at very different sample sizes. The ≈ wOBA numbers
+        summarize each pitcher's mix of results against an average lineup, for reading only.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if simres.points.unchanged > 0 else 'neg' }}">{{ signed(simres.points.unchanged) }} <small>pts</small></span>
+    <span class="tile-foot">≈ {{ woba(simres.woba.unchanged) }} wOBA · starter ≈ {{ woba(simres.woba.starter) }}</span>
   </div>
   <div class="tile">
     <span class="tile-label">If he has changed
       {% call info("If he has changed") %}Only {{ r.label }} ({{ r.recent.pa }} plate appearances), pulled toward the
-        league average the same way. Projected xwOBA {{ woba(r.changed) }} ± {{ woba(1.96 * r.changed_sd) }}.{% endcall %}</span>
-    <span class="big-value {{ 'pos' if result.changed > 0 else 'neg' }}">{{ signed(result.changed) }} <small>pts</small></span>
-    <span class="tile-foot">xwOBA {{ woba(r.changed) }} · starter {{ woba(starts.xwoba) }}</span>
+        league average the same way.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if simres.points.changed > 0 else 'neg' }}">{{ signed(simres.points.changed) }} <small>pts</small></span>
+    <span class="tile-foot">≈ {{ woba(simres.woba.changed) }} wOBA · starter ≈ {{ woba(simres.woba.starter) }}</span>
   </div>
   <div class="tile">
     <span class="tile-label">Expected
       {% call info("About the expected value") %}The two cases weighted by the chance he has changed
-        ({{ pct(result.p_changed) }}). The chance pulling is better also counts the uncertainty in both
-        pitchers' numbers.{% endcall %}</span>
-    <span class="big-value {{ 'pos' if result.expected > 0 else 'neg' }}">{{ signed(result.expected) }} <small>pts</small></span>
-    <span class="tile-foot">Chance pulling is better: {{ pct(result.p_pull_better) }}</span>
+        ({{ pct(simres.p_changed) }}). The chance pulling is better comes from {{ simres.n_draws }} draws that also vary
+        both pitchers' and the hitters' rates within their uncertainty.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if simres.points.expected > 0 else 'neg' }}">{{ signed(simres.points.expected) }} <small>pts</small></span>
+    <span class="tile-foot">Chance pulling is better: {{ pct(simres.p_pull_better) }} · 90% range
+      {{ signed(simres.range90[0]) }} to {{ signed(simres.range90[1]) }}</span>
   </div>
+</section>
+
+<div class="section-label"><h2>Your team's chance to win after this half inning</h2>
+  {% call info("About the three choices") %}Pull now: {{ r.name }} finishes the half inning (a reliever must face
+    three batters or finish it anyway). Face one more: your starter pitches to {{ due_name or 'the next hitter' }}, then
+    you take the better of the two choices from wherever that leaves the inning. Let him finish: your starter
+    pitches the rest of the half inning.{% endcall %}</div>
+<section class="tiles" aria-label="Three choices">
+  {% for key, label, foot in [('pull_now', 'Pull now', r.name ~ ' finishes the inning'),
+                              ('one_more', 'Face one more, then decide', 'starter faces ' ~ (due_name or 'the next hitter')),
+                              ('stay', 'Let him finish', 'starter finishes the inning')] %}
+  <div class="tile{% if simres.best == key %} best{% endif %}">
+    <span class="tile-label">{{ label }}</span>
+    <span class="tile-value">{{ pct(e[key], 1) }}</span>
+    <span class="tile-foot">{% if simres.best == key %}<strong>Best</strong> · {% endif %}{{ foot }}</span>
+  </div>
+  {% endfor %}
 </section>
 
 <section class="tiles" aria-label="Inputs to the decision">
@@ -60,28 +81,29 @@
         The chance he has changed starts at 10% (chosen by a backtest on 2019–2020 relievers) and rises the more
         surprising his recent strikeouts are ({{ signed(r.z) }} standard deviations).{% endcall %}</span>
     <span class="tile-value">{{ r.recent_k }} <small>vs {{ num(r.expected_k, 1) }} expected</small></span>
-    <span class="tile-foot">{{ pct(result.p_changed) }} chance he has changed</span>
+    <span class="tile-foot">{{ pct(r.p_changed) }} chance he has changed</span>
   </div>
   <div class="tile">
     <span class="tile-label">Break-even
-      {% call info("About break-even") %}The chance he has changed at which pulling and staying are worth the same.{% endcall %}</span>
-    {% if result.break_even is not none %}
-      <span class="tile-value">{{ pct(result.break_even) }}</span>
-      <span class="tile-foot">pull only if the chance he has changed is {{ result.pull_if }} this</span>
+      {% call info("About break-even") %}The chance he has changed at which pulling now and letting your starter
+        finish are worth the same.{% endcall %}</span>
+    {% if simres.break_even is not none %}
+      <span class="tile-value">{{ pct(simres.break_even) }}</span>
+      <span class="tile-foot">pull only if the chance he has changed is {{ simres.pull_if }} this</span>
     {% else %}
       <span class="tile-value">—</span>
-      <span class="tile-foot">{{ 'Pulling gains either way' if result.pull_if == 'always' else 'Pulling loses either way' }}</span>
+      <span class="tile-foot">{{ 'Pulling gains either way' if simres.pull_if == 'always' else 'Pulling loses either way' }}</span>
     {% endif %}
   </div>
   <div class="tile">
-    <span class="tile-label">Your starter, third time through
-      {% call info("About the starter's number") %}xwOBA hitters posted the third time through in {{ starts.starts }}
+    <span class="tile-label">Your starter, third time through (xwOBA)
+      {% call info("About the starter's number") %}How hitters did the third time through in {{ starts.starts }}
         regular-season starts before the date that meet the filters below ({{ starts.pitchers }} pitchers).
         {{ starts.reached }} of them reached a third time and {{ starts.three }} faced at least 3 batters. Through two times
         those starts allowed {{ woba(starts.early_xwoba) }} xwOBA: picking dominant starts picks some luck, so the
         third time looks closer to average. ± is a 95% range for the average, clustered by pitcher.{% endcall %}</span>
     <span class="tile-value">{{ woba(starts.xwoba) }} <small>± {{ woba(1.96 * starts.se) }}</small></span>
-    <span class="tile-foot">{{ starts.starts }} similar starts{% if starts.pa < 300 %} · <strong>small sample</strong>{% endif %}</span>
+    <span class="tile-foot">{{ starts.starts }} similar starts{% if simres.starter_name %} · {{ simres.starter_name }} ({{ simres.starter_hand }}HP){% endif %}{% if starts.pa < 300 %} · <strong>small sample</strong>{% endif %}</span>
   </div>
   <div class="tile">
     <span class="tile-label">Leverage
@@ -145,7 +167,11 @@
     </div>
     <label>Our lead in runs (negative if behind)
       <input type="number" name="lead" value="{{ form.lead }}" min="-10" max="10"></label>
-    <label>Batters this decision affects
+    {% if simres and simres.lineup %}
+    <label>Due up
+      <select name="due">{% for b, bats, name in simres.lineup %}<option value="{{ b }}" {% if loop.index0 == simres.due_spot %}selected{% endif %}>{{ loop.index }}. {{ name }} ({{ bats }})</option>{% endfor %}</select></label>
+    {% endif %}
+    <label>Batters for the formula check
       <input type="number" name="batters" value="{{ form.batters }}" min="1" max="9"></label>
   </fieldset>
 
@@ -155,11 +181,15 @@
 
 <details class="panel method">
   <summary>How this is calculated</summary>
-  <p>Both pitchers are measured in expected wOBA (xwOBA). The starter's number is how hitters did the third time
-    through in earlier regular-season starts that meet the filters above. The reliever's is projected from his own
-    games, with each part pulled toward the league average. The difference, times the batters affected, divided by
-    1.2 gives runs; runs times leverage divided by 10 gives wins. A reliever must face at least three batters,
-    while the starter could face one more and be reassessed: that option isn't modeled yet.</p>
+  <p>The rest of the half inning is solved exactly: every plate appearance, every base-out state, weighted by its
+    chance. Each pitcher-hitter matchup combines the pitcher's and the hitter's rates for seven results (odds-ratio
+    method, with the league's platoon effect). What each result does to outs, runners and runs, and the chance to win
+    once the half inning ends, come from 2018–2020 games. Checked two ways: with league-average players it reproduces
+    real run expectancy within 0.02 runs per inning and Statcast's win probability at the Game 6 moment.</p>
+  {% if result %}<p>Cross-check: the simpler formula (xwOBA difference over {{ form.batters }} batters ÷ 1.2 × leverage ÷ 10)
+    gives {{ signed(result.stable) }} / {{ signed(result.changed) }} / {{ signed(result.expected) }} points.</p>{% endif %}
+  <p>Not modeled: the starter tiring within the third time through, and what the staff would learn about the reliever
+    from his first hitters. After this half inning, both teams are treated as average.</p>
   {% if used %}
   <div class="table-wrap"><table class="mini used">
     <thead><tr><th>Input</th><th>Data used</th><th class="num">Before the date?</th></tr></thead>

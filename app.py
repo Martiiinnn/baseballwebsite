@@ -12,6 +12,7 @@ Run locally:   python3 app.py        then open http://127.0.0.1:5001
 Data:          site_data/coaches.db  (built by build_database.py)
 """
 from datetime import date
+from functools import lru_cache
 
 from flask import Flask, g, redirect, render_template, request, url_for
 
@@ -19,6 +20,7 @@ import charts
 import mlb
 import model
 import queries as q
+import sim
 
 # Static files live in public/static so they work both locally and on Vercel,
 # which serves anything under public/ from its CDN (and ignores Flask's static folder).
@@ -98,6 +100,27 @@ def helpers():
     return {"pct": pct, "woba": woba, "num": num, "signed": signed, "date_label": date_label}
 
 
+def case_due_up(con):
+    """The hitter due up when Snell was pulled (Mookie Betts)."""
+    game = q.find_postseason_game(con, DEFAULT_DATE, DEFAULT_TEAM)
+    row = con.execute("SELECT batter FROM postseason_pa WHERE game_pk = ? AND at_bat_number = ?",
+                      (game["game_pk"], CASE_PULL_AB)).fetchone()
+    return row[0] if row else None
+
+
+@lru_cache(maxsize=1)
+def game6_simulation():
+    """The Game 6 decision never changes, so simulate it once per server process."""
+    con = q.connect()
+    card = q.starter_card(con, DEFAULT_TEAM, DEFAULT_DATE)
+    lk = card["manager_link"]
+    rel = model.reliever(con, CASE_RELIEVER, DEFAULT_DATE)
+    out = sim.evaluate(con, rel, DEFAULT_DATE, DEFAULT_TEAM, 6, "Bot", 1, "100", 1,
+                       (lk["k_min"], lk["woba_max"], lk["pitch_max"]), due=case_due_up(con))
+    con.close()
+    return out
+
+
 # ---------------------------------------------------------------- pages
 
 @app.route("/game-6")
@@ -126,7 +149,7 @@ def game6_review():
         chart=charts.win_prob_svg(wp, DEFAULT_TEAM, CASE_PULL_AB, "Snell pulled", height=380),
         pull=pull, inning_end=inning_end, swings=swings, final=wp[-1]["after"],
         card=card, similar=similar, everyone=everyone, rel=rel, rel_recent=rel_recent, rel_season=rel_season,
-        li=li, li_label=q.leverage_label(li), result=result)
+        li=li, li_label=q.leverage_label(li), result=result, simres=game6_simulation())
 
 
 @app.route("/hook")
@@ -159,6 +182,12 @@ def hook():
     rel = model.reliever(con, rel_id, day) if rel_id else None
     result = model.decide(starts, rel, li, n_batters) if rel else None
     used = model.data_used(starts, rel, day) if rel else []
+    due = arg("due", None, int)
+    if due is None and team == DEFAULT_TEAM and day == DEFAULT_DATE:
+        due = case_due_up(con)
+    bases = f"{int(on1)}{int(on2)}{int(on3)}"
+    simres = (sim.evaluate(con, rel, day, team, inning, half, outs, bases, lead, (k_min, woba_max, pitch_max), due=due)
+              if rel and starts["xwoba"] is not None else None)
 
     return render_template(
         "manager.html", active="hook", teams=teams, span=span, team=team, day=day,
@@ -166,7 +195,7 @@ def hook():
               "batters": n_batters, "inning": inning, "half": half, "outs": outs,
               "lead": lead, "on1": on1, "on2": on2, "on3": on3, "reliever": rel_id},
         options=options, starts=starts, li=li, li_n=li_n, li_label=q.leverage_label(li),
-        rel=rel, result=result, used=used)
+        rel=rel, result=result, used=used, simres=simres, due=due)
 
 
 @app.route("/mound-visit")

@@ -113,15 +113,17 @@
       <div><p class="card-role">The Hook</p><h3>Snell → Anderson</h3></div></div>
     <dl class="stats">
       <div><dt>If Anderson is unchanged</dt>
-        <dd class="{{ 'pos' if result.stable > 0 else 'neg' }}">{{ signed(result.stable) }} pts</dd></div>
+        <dd class="{{ 'pos' if simres.points.unchanged > 0 else 'neg' }}">{{ signed(simres.points.unchanged) }} pts</dd></div>
       <div><dt>If he has changed</dt>
-        <dd class="{{ 'pos' if result.changed > 0 else 'neg' }}">{{ signed(result.changed) }} pts</dd></div>
-      <div><dt>Expected ({{ pct(result.p_changed) }} changed)
-          {% call info("About these numbers") %}Win probability change from pulling Snell over the next 3 batters,
-            in expected wOBA on both sides. Pulling comes out ahead only if the chance Anderson has changed is
-            {{ result.pull_if }} {{ pct(result.break_even) }}.{% endcall %}</dt>
-        <dd class="{{ 'pos' if result.expected > 0 else 'neg' }}">{{ signed(result.expected) }} pts</dd></div>
-      <div><dt>Chance pulling is better</dt><dd>{{ pct(result.p_pull_better) }}</dd></div>
+        <dd class="{{ 'pos' if simres.points.changed > 0 else 'neg' }}">{{ signed(simres.points.changed) }} pts</dd></div>
+      <div><dt>Expected ({{ pct(simres.p_changed) }} changed)
+          {% call info("About these numbers") %}Win probability change from pulling Snell now instead of letting him
+            finish the inning, simulated plate appearance by plate appearance against the Dodgers' lineup from Mookie
+            Betts. Pulling comes out ahead only if the chance Anderson has changed is {{ simres.pull_if }}
+            {{ pct(simres.break_even) }}.{% endcall %}</dt>
+        <dd class="{{ 'pos' if simres.points.expected > 0 else 'neg' }}">{{ signed(simres.points.expected) }} pts</dd></div>
+      <div><dt>Chance pulling is better</dt><dd>{{ pct(simres.p_pull_better) }}</dd></div>
+      <div><dt>Snell faces Betts, then decide</dt><dd>{{ signed(simres.wait_value, 1) }} pts</dd></div>
     </dl>
     <a class="card-link" href="{{ url_for('hook') }}">Open The Hook →</a>
   </article>
@@ -142,8 +144,10 @@
       postseason. The chance he has changed comes from how far his postseason strikeouts fell below what his
       history predicted against those hitters, starting from a 10% prior chosen by a backtest.</dd>
     <dt>Win probability</dt>
-    <dd>xwOBA difference over 3 batters ÷ 1.2 = runs; runs × leverage ÷ 10 = wins. A game-state simulation
-      is the planned replacement.</dd>
+    <dd>The rest of the half inning is simulated plate appearance by plate appearance: each pitcher's chances of seven
+      results against each Dodgers hitter, what each result does to the outs, runners and score, and the Rays' chance
+      to win once the inning ends (2018–2020 games). A simpler formula, xwOBA difference over 3 batters ÷ 1.2 × leverage
+      ÷ 10, gives {{ signed(result.stable) }} / {{ signed(result.changed) }} / {{ signed(result.expected) }} points.</dd>
   </dl>
 </details>
 {% endblock %}

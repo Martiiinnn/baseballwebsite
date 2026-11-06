@@ -11,9 +11,12 @@ Step 2  Build tables with SQL:
           batter_splits       each hitter vs. left/right-handed pitchers  -> matchups
           league_platoon / league_tto / league_reliever   league baselines
           leverage_by_state   how much each game state can swing win probability
+          pa_transitions      game state before and after each kind of plate-appearance result
+          run_expectancy      runs scored from each base-out state to the end of the inning
+          win_expectancy      batting team's win probability by inning, outs, runners and score
           players             player id -> name
-Step 3  Validation checks: data quality, known facts, and whether the SQL reproduces
-        the pandas results from snell_vs_peers.py
+Step 3  Validation checks: data quality, known facts, whether the SQL reproduces
+        the pandas results from snell_vs_peers.py, and whether the game-state tables add up
 Step 4  Export the small tables the website reads: site_data/coaches.db
         (plus site_data/DATA_DICTIONARY.md describing every table and column)
 
@@ -138,6 +141,19 @@ def sql_list(items) -> str:
 
 K = sql_list({"strikeout", "strikeout_double_play"})
 HITS = sql_list({"single", "double", "triple", "home_run"})
+# Plate-appearance results grouped for the game-state simulation. "OUT" is every other ball in
+# play (including double plays, sacrifice flies and reaching on an error).
+OUTS_IN_PLAY = sql_list({"field_out", "force_out", "grounded_into_double_play", "double_play",
+                         "triple_play", "fielders_choice", "fielders_choice_out", "sac_fly",
+                         "sac_fly_double_play", "sac_bunt", "sac_bunt_double_play", "field_error"})
+EVENT_CLASS = f"""CASE WHEN events IN ({K}) THEN 'K'
+                      WHEN events IN ('walk', 'hit_by_pitch', 'intent_walk') THEN 'BB'
+                      WHEN events = 'single' THEN '1B'
+                      WHEN events = 'double' THEN '2B'
+                      WHEN events = 'triple' THEN '3B'
+                      WHEN events = 'home_run' THEN 'HR'
+                      WHEN events IN ({OUTS_IN_PLAY}) THEN 'OUT' END"""
+BASES = "CAST(on_1b AS TEXT) || CAST(on_2b AS TEXT) || CAST(on_3b AS TEXT)"
 WHIFFS = sql_list({"swinging_strike", "swinging_strike_blocked", "missed_bunt"})
 SWINGS = sql_list({"swinging_strike", "swinging_strike_blocked", "missed_bunt", "foul",
                    "foul_tip", "foul_bunt", "hit_into_play", "hit_into_play_no_out",
@@ -150,6 +166,11 @@ METRIC_SUMS = f"""
     SUM(CASE WHEN woba_denom = 1 AND events IN ({K}) THEN 1 ELSE 0 END) AS k,
     SUM(CASE WHEN events = 'walk' THEN 1 ELSE 0 END)              AS bb,
     SUM(CASE WHEN events IN ({HITS}) THEN 1 ELSE 0 END)           AS h,
+    SUM(CASE WHEN woba_denom = 1 AND events = 'hit_by_pitch' THEN 1 ELSE 0 END) AS hbp,
+    SUM(CASE WHEN events = 'single' THEN 1 ELSE 0 END)            AS n1b,
+    SUM(CASE WHEN events = 'double' THEN 1 ELSE 0 END)            AS n2b,
+    SUM(CASE WHEN events = 'triple' THEN 1 ELSE 0 END)            AS n3b,
+    SUM(CASE WHEN events = 'home_run' THEN 1 ELSE 0 END)          AS hr,
     SUM(COALESCE(xwoba, 0))                                       AS xwoba_sum,
     SUM(CASE WHEN woba_denom = 1 THEN woba_value ELSE 0 END)      AS woba_sum,
     SUM(whiffs)                                                   AS whiffs,
@@ -288,7 +309,13 @@ FROM (SELECT game_pk, MIN(game_date) AS game_date, MIN(season) AS season,
              SUM(CASE WHEN tto = 3 AND woba_denom = 1 AND events IN ({K}) THEN 1 ELSE 0 END) AS third_k,
              SUM(CASE WHEN tto = 3 AND woba_denom = 1 THEN woba_value ELSE 0 END) AS third_woba_sum,
              SUM(CASE WHEN tto = 3 AND woba_denom = 1 THEN woba_value * woba_value ELSE 0 END) AS third_woba_sq,
-             SUM(CASE WHEN tto = 3 THEN COALESCE(xwoba, 0) ELSE 0 END) AS third_xwoba_sum
+             SUM(CASE WHEN tto = 3 THEN COALESCE(xwoba, 0) ELSE 0 END) AS third_xwoba_sum,
+             SUM(CASE WHEN tto = 3 AND events = 'walk' THEN 1 ELSE 0 END) AS third_bb,
+             SUM(CASE WHEN tto = 3 AND woba_denom = 1 AND events = 'hit_by_pitch' THEN 1 ELSE 0 END) AS third_hbp,
+             SUM(CASE WHEN tto = 3 AND events = 'single' THEN 1 ELSE 0 END) AS third_1b,
+             SUM(CASE WHEN tto = 3 AND events = 'double' THEN 1 ELSE 0 END) AS third_2b,
+             SUM(CASE WHEN tto = 3 AND events = 'triple' THEN 1 ELSE 0 END) AS third_3b,
+             SUM(CASE WHEN tto = 3 AND events = 'home_run' THEN 1 ELSE 0 END) AS third_hr
       FROM plate_appearances
       WHERE is_starter = 1
       GROUP BY game_pk, pitcher) s;
@@ -349,6 +376,60 @@ SELECT inning, half, outs, bases, diff,
        ROUND(AVG(abs_dwp) / (SELECT AVG(abs_dwp) FROM s), 3) AS li
 FROM s
 GROUP BY inning, half, outs, bases, diff;
+"""),
+
+    ("pa_transitions", f"""
+DROP TABLE IF EXISTS pa_transitions;
+-- What each kind of plate-appearance result does to the game state, from the regular seasons.
+-- The state after a plate appearance is the state at the start of the next one in the same half
+-- inning (so steals and wild pitches during the plate appearance are included); if there is no
+-- next one, the inning ended: 3 outs, bases cleared.
+CREATE TABLE pa_transitions AS
+WITH seq AS (
+    SELECT outs_when_up AS outs, {BASES} AS bases, {EVENT_CLASS} AS event_class, runs_scored,
+           LEAD(outs_when_up) OVER (PARTITION BY game_pk, inning, inning_topbot ORDER BY at_bat_number) AS next_outs,
+           LEAD({BASES}) OVER (PARTITION BY game_pk, inning, inning_topbot ORDER BY at_bat_number) AS next_bases
+    FROM plate_appearances
+    WHERE game_type = 'R'
+)
+SELECT outs, bases, event_class,
+       COALESCE(next_outs, 3) AS outs_after,
+       CASE WHEN next_outs IS NULL THEN '000' ELSE next_bases END AS bases_after,
+       runs_scored AS runs, COUNT(*) AS n
+FROM seq
+WHERE event_class IS NOT NULL AND runs_scored >= 0
+  AND (next_outs IS NULL OR next_outs >= outs)
+GROUP BY outs, bases, event_class, outs_after, bases_after, runs;
+"""),
+
+    ("run_expectancy", f"""
+DROP TABLE IF EXISTS run_expectancy;
+-- Runs scored from the start of each plate appearance to the end of the half inning
+-- (innings 1-8 only, so walk-offs and extra-inning rules don't cut innings short).
+CREATE TABLE run_expectancy AS
+WITH r AS (
+    SELECT outs_when_up AS outs, {BASES} AS bases,
+           SUM(runs_scored) OVER (PARTITION BY game_pk, inning, inning_topbot ORDER BY at_bat_number
+                                  ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING) AS runs_rest
+    FROM plate_appearances
+    WHERE game_type = 'R' AND inning <= 8
+)
+SELECT outs, bases, COUNT(*) AS n, ROUND(AVG(runs_rest), 4) AS re
+FROM r GROUP BY outs, bases;
+"""),
+
+    ("win_expectancy", f"""
+DROP TABLE IF EXISTS win_expectancy;
+-- The batting team's win probability (Statcast's model, averaged) at the start of plate appearances
+-- in each inning, half, outs, runners and score margin (batting team's runs minus fielding team's,
+-- capped at +/-8). Used to value the game state at the end of a simulated half inning.
+CREATE TABLE win_expectancy AS
+SELECT MIN(inning, 9) AS inning, inning_topbot AS half, outs_when_up AS outs, {BASES} AS bases,
+       MAX(-8, MIN(8, bat_score - fld_score)) AS diff, COUNT(*) AS n,
+       ROUND(AVG(CASE WHEN inning_topbot = 'Bot' THEN home_win_exp ELSE 1 - home_win_exp END), 4) AS wp
+FROM plate_appearances
+WHERE game_type = 'R' AND home_win_exp IS NOT NULL
+GROUP BY MIN(inning, 9), inning_topbot, outs_when_up, {BASES}, MAX(-8, MIN(8, bat_score - fld_score));
 """),
 ]
 
@@ -490,6 +571,24 @@ def run_checks(con) -> bool:
             details.append(f"{label}: {s_starts} starts / {s_woba:.3f} (pandas {p_starts} / {p_woba:.3f})")
         add("SQL matches pandas (snell_vs_peers)", "PASS" if ok else "FAIL", "; ".join(details))
 
+    # 11. Transitions add up: runners before + batter = runners after + runs + new outs
+    #     (checked when the inning didn't end, because stranded runners leave the state).
+    bad, total = one(con, """SELECT SUM(CASE WHEN (LENGTH(REPLACE(bases, '0', '')) + 1)
+                                          != (LENGTH(REPLACE(bases_after, '0', '')) + runs + outs_after - outs)
+                                     THEN n ELSE 0 END), SUM(n)
+                             FROM pa_transitions WHERE outs_after < 3""")
+    share = 1 - (bad or 0) / total if total else 0
+    add("Transitions add up (runners, runs, outs)", "PASS" if share >= 0.99 else "WARN",
+        f"{share:.2%} of {total:,} plate appearances")
+
+    # 12. Run expectancy looks like baseball: about half a run with nobody on and nobody out.
+    re0, re_max = one(con, """SELECT MAX(CASE WHEN outs = 0 AND bases = '000' THEN re END),
+                                     MAX(CASE WHEN outs = 0 AND bases = '111' THEN re END)
+                              FROM run_expectancy""")
+    sane = re0 is not None and 0.4 <= re0 <= 0.6 and re_max is not None and 2.0 <= re_max <= 2.6
+    add("Run expectancy looks like baseball", "PASS" if sane else "WARN",
+        f"0 out, empty: {re0}; 0 out, bases loaded: {re_max}")
+
     width = max(len(r[0]) for r in results)
     for name, status, detail in results:
         print(f"  [{status}] {name:<{width}}  {detail}")
@@ -529,6 +628,16 @@ SITE_TABLES = {
                       "Every 2020 postseason plate appearance. home_win_exp = home team's win "
                       "probability before the PA; delta_home_win_exp = change over the whole PA. "
                       "Game pages."),
+    "pa_transitions": ("SELECT * FROM pa_transitions",
+                       "Game state before and after each kind of plate-appearance result (K, BB incl. "
+                       "HBP and intentional walks, 1B, 2B, 3B, HR, OUT = every other ball in play), with "
+                       "runs scored and counts, 2018-2020 regular seasons. bases = runners on 1st-2nd-3rd."),
+    "run_expectancy": ("SELECT * FROM run_expectancy",
+                       "Average runs from each base-out state to the end of the half inning, "
+                       "innings 1-8 of the 2018-2020 regular seasons."),
+    "win_expectancy": ("SELECT * FROM win_expectancy",
+                       "Batting team's win probability (Statcast model, averaged) by inning (9 = 9th "
+                       "and later), half, outs, runners and score margin (capped at +/-8)."),
     "players": ("SELECT * FROM players", "Player id -> name."),
 }
 SITE_INDEXES = [

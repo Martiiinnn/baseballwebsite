@@ -144,6 +144,7 @@ details.info[open] .i, details.info > summary:hover .i { border-color: var(--tex
 .tile-label { color: var(--text-2); font-size: var(--fs-small); }
 .tile-value { font-size: var(--fs-large); font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .tile-foot { color: var(--text-2); font-size: var(--fs-small); }
+.tile.best { border: 2px solid var(--text-2); }
 
 /* the numbers each page is built around */
 .big-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3);

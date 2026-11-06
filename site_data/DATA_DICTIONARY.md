@@ -7,43 +7,43 @@ Counting columns ending in _sum are totals; divide by pa (or the matching count)
 
 One row per start. early_* = first two times through the order (what the manager knows when deciding); third_* = how the third time through went. Manager page: 'should I pull him?'
 
-Columns: game_pk, game_date, season, game_type, pitcher, pitcher_name, throws, team, opponent, pitches, early_pa, early_k, early_woba_sum, early_xwoba_sum, early_pitches, early_whiffs, early_swings, third_pa, third_k, third_woba_sum, third_woba_sq, third_xwoba_sum, early_k_pct, early_woba, early_whiff_pct, third_woba
+Columns: game_pk, game_date, season, game_type, pitcher, pitcher_name, throws, team, opponent, pitches, early_pa, early_k, early_woba_sum, early_xwoba_sum, early_pitches, early_whiffs, early_swings, third_pa, third_k, third_woba_sum, third_woba_sq, third_xwoba_sum, third_bb, third_hbp, third_1b, third_2b, third_3b, third_hr, early_k_pct, early_woba, early_whiff_pct, third_woba
 
 ## pitcher_games (51,117 rows)
 
 One row per pitcher per game: pitches, results, four-seam velocity and spin, whiff rate, days of rest. Bullpen board and pitching coach page.
 
-Columns: game_pk, game_date, season, game_type, pitcher, pitcher_name, throws, team, opponent, is_starter, first_inning, batters_faced, pitches, runs_while_pitching, ff_velo_n, ff_velo_sum, ff_spin_n, ff_spin_sum, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, ff_velo, ff_spin, whiff_pct, xwoba, days_rest
+Columns: game_pk, game_date, season, game_type, pitcher, pitcher_name, throws, team, opponent, is_starter, first_inning, batters_faced, pitches, runs_while_pitching, ff_velo_n, ff_velo_sum, ff_spin_n, ff_spin_sum, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, ff_velo, ff_spin, whiff_pct, xwoba, days_rest
 
 ## pitcher_splits (2,392 rows)
 
 Each pitcher vs. left- and right-handed batters, 2018-2020 regular seasons.
 
-Columns: pitcher, pitcher_name, throws, batter_side, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
+Columns: pitcher, pitcher_name, throws, batter_side, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
 
 ## batter_splits (2,424 rows)
 
 Each hitter vs. left- and right-handed pitchers, 2018-2020 regular seasons.
 
-Columns: batter, bats, pitcher_hand, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
+Columns: batter, bats, pitcher_hand, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
 
 ## league_platoon (4 rows)
 
 League averages for each batter-side / pitcher-hand matchup.
 
-Columns: batter_side, pitcher_hand, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
+Columns: batter_side, pitcher_hand, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
 
 ## league_tto (12 rows)
 
 League starters by season and time through the order.
 
-Columns: season, tto, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
+Columns: season, tto, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
 
 ## league_reliever (3 rows)
 
 League relievers by season.
 
-Columns: season, pa, k, bb, h, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
+Columns: season, pa, k, bb, h, hbp, n1b, n2b, n3b, hr, xwoba_sum, woba_sum, whiffs, swings, bbe, hard_hit, ev_sum, xwoba, woba, k_pct, bb_pct, whiff_pct, hard_hit_pct, avg_ev
 
 ## leverage_by_state (3,674 rows)
 
@@ -56,6 +56,24 @@ Columns: inning, half, outs, bases, diff, n_pa, li
 Every 2020 postseason plate appearance. home_win_exp = home team's win probability before the PA; delta_home_win_exp = change over the whole PA. Game pages.
 
 Columns: game_pk, game_date, game_type, home_team, away_team, inning, inning_topbot, at_bat_number, pitcher, batter, stand, p_throws, outs_when_up, on_1b, on_2b, on_3b, bat_score, fld_score, runs_scored, events, woba_value, xwoba, tto, is_starter, home_win_exp, delta_home_win_exp
+
+## pa_transitions (948 rows)
+
+Game state before and after each kind of plate-appearance result (K, BB incl. HBP and intentional walks, 1B, 2B, 3B, HR, OUT = every other ball in play), with runs scored and counts, 2018-2020 regular seasons. bases = runners on 1st-2nd-3rd.
+
+Columns: outs, bases, event_class, outs_after, bases_after, runs, n
+
+## run_expectancy (24 rows)
+
+Average runs from each base-out state to the end of the half inning, innings 1-8 of the 2018-2020 regular seasons.
+
+Columns: outs, bases, n, re
+
+## win_expectancy (6,473 rows)
+
+Batting team's win probability (Statcast model, averaged) by inning (9 = 9th and later), half, outs, runners and score margin (capped at +/-8).
+
+Columns: inning, half, outs, bases, diff, n, wp
 
 ## players (1,934 rows)
 
