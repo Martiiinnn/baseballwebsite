@@ -6,10 +6,12 @@
   <div>
     <h1>Bullpen Board
       {% call info("About this board") %}Every reliever the team used in the 45 days before the date, sorted by
-        expected wOBA (lower is better). Expected wOBA blends {{ pen.recent_label }} with the 2-season baseline,
-        so a few bad outings move it only a little. Recent = {{ pen.recent_label }}; season = the
-        {{ pen.season }} regular season. Fastball is four-seam only; “—” means he doesn't throw one or
-        hasn't pitched in that span. Handedness splits cover the 2018–2020 regular seasons.{% endcall %}</h1>
+        projected expected wOBA (xwOBA; lower is better). The projection pulls strikeout rate, walk rate and contact
+        quality toward the league average separately, and weighs in the chance he has changed: a strikeout warning
+        appears when his recent strikeouts are far enough below his history that the chance passes 50%.
+        Recent = {{ pen.recent_label }}; season = the {{ pen.season }} regular season. Fastball is four-seam only;
+        “—” means he doesn't throw one or hasn't pitched in that span. Handedness splits cover the 2018–2020
+        regular seasons and are not limited by date.{% endcall %}</h1>
     <p class="context">{{ team_logo(team) }} {{ team }} · before {{ date_label(day) }} · {{ pen.relievers | length }} relievers ·
       recent = {{ pen.recent_label }}</p>
   </div>
@@ -25,7 +27,7 @@
     <thead>
       <tr>
         <th>Reliever</th>
-        <th class="num">Expected wOBA</th>
+        <th class="num">Expected xwOBA</th>
         <th>Rest and workload</th>
         <th class="num">Fastball mph<br><span class="note">recent / season</span></th>
         <th class="num">Whiff rate<br><span class="note">recent / season</span></th>

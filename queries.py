@@ -1,19 +1,17 @@
 """
-Every number the site shows comes from a function in this file.
-All of them read site_data/coaches.db (built by build_database.py) and use only
-information available BEFORE the date being looked at, like a coach would have.
+Data access for the site: lists for the forms, pitcher totals, leverage, the starter card and
+the win-probability chart. The projections and the pull decision are in model.py.
+All of it reads site_data/coaches.db (built by build_database.py).
 """
-import math
 import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "site_data" / "coaches.db"
 
-# Same assumptions as snell_decision.py
+# Same assumptions as snell_decision.py (the projections themselves live in model.py)
 WOBA_SCALE = 1.2        # wOBA points -> runs per plate appearance
 RUNS_PER_WIN = 10       # at average leverage, about 10 runs = 1 win
-K_REG = 300             # plate appearances of league-average "prior" mixed into small samples
 MIN_EARLY_PA = 18       # a start counts once the starter has faced 18 batters (two times through)
 
 K_EVENTS = ("strikeout", "strikeout_double_play")
@@ -29,13 +27,6 @@ def connect():
 
 def ratio(num, den, digits=3):
     return round(num / den, digits) if den else None
-
-
-def regress(rate, n, prior, k=K_REG):
-    """Blend a small sample with a prior: the fewer plate appearances, the closer to the prior."""
-    if not n or rate is None:
-        return prior
-    return (rate * n + prior * k) / (n + k)
 
 
 def flip_name(name):
@@ -107,11 +98,6 @@ def pitcher_totals(con, pitcher, where, params=()):
     return summarize(row)
 
 
-def league_reliever_xwoba(con):
-    r = con.execute("SELECT SUM(xwoba_sum), SUM(pa) FROM league_reliever").fetchone()
-    return r[0] / r[1]
-
-
 def recent_window(con, as_of):
     """'This postseason' once the postseason has started, otherwise 'last 30 days'."""
     season = int(as_of[:4])
@@ -123,60 +109,7 @@ def recent_window(con, as_of):
     return ("game_date >= ? AND game_date < ?", (day_before(as_of, 30), as_of), "over the last 30 days")
 
 
-def reliever_scenarios(con, pitcher, as_of):
-    """Three estimates of a reliever's expected xwOBA allowed, using only games before as_of."""
-    season = int(as_of[:4])
-    league = league_reliever_xwoba(con)
-    base = pitcher_totals(con, pitcher,
-                          "game_type = 'R' AND season IN (?, ?) AND game_date < ?",
-                          (season - 1, season, as_of))
-    where, params, label = recent_window(con, as_of)
-    recent = pitcher_totals(con, pitcher, where, params)
-
-    base_x, base_n = (base["xwoba"], base["pa"]) if base else (None, 0)
-    rec_x, rec_n = (recent["xwoba"], recent["pa"]) if recent else (None, 0)
-    full = regress(base_x, base_n, league)
-    form = regress(rec_x, rec_n, full)
-    worst = rec_x if rec_n else full
-    return {
-        "recent_label": label,
-        "base": base, "recent": recent, "league": league,
-        "scenarios": [
-            {"key": "full", "name": "Full strength", "xwoba": full,
-             "basis": (f"{season - 1}-{season} regular seasons ({base_n} PA, xwOBA "
-                       f"{base_x:.3f}) blended with the league reliever average")
-             if base_n else "no recent regular-season data: league reliever average"},
-            {"key": "form", "name": "Recent form", "xwoba": form,
-             "basis": (f"form {label} ({rec_n} PA, xwOBA {rec_x:.3f}) blended with full strength")
-             if rec_n else f"no appearances {label}"},
-            {"key": "worst", "name": "Recent form is real", "xwoba": worst,
-             "basis": f"form {label}, taken at face value" if rec_n else f"no appearances {label}"},
-        ],
-    }
-
-
-# ---------------------------------------------------------------- manager: should I pull him?
-
-def comparable_starts(con, k_min, woba_max, pitch_max):
-    """Regular-season starts 2018-2020 at least this dominant through two times, and how
-    hitters did the third time through."""
-    r = con.execute(f"""
-        SELECT COUNT(*) AS starts,
-               SUM(CASE WHEN third_pa > 0 THEN 1 ELSE 0 END) AS reached,
-               SUM(third_pa) AS pa, SUM(third_woba_sum) AS w, SUM(third_woba_sq) AS w2,
-               SUM(third_k) AS k
-        FROM starter_games
-        WHERE game_type = 'R' AND early_pa >= {MIN_EARLY_PA}
-          AND 1.0 * early_k / early_pa >= ?
-          AND early_woba_sum / early_pa <= ?
-          AND early_pitches <= ?""", (k_min, woba_max, pitch_max)).fetchone()
-    if not r["pa"]:
-        return {"starts": r["starts"] or 0, "pa": 0, "woba": None, "ci": None}
-    w = r["w"] / r["pa"]
-    sd = math.sqrt(max(r["w2"] / r["pa"] - w * w, 0))
-    return {"starts": r["starts"], "reached": r["reached"], "pa": r["pa"], "woba": w,
-            "ci": 1.96 * sd / math.sqrt(r["pa"]), "k_pct": r["k"] / r["pa"]}
-
+# ---------------------------------------------------------------- manager: how much is at stake?
 
 def leverage(con, inning, pitching_half, outs, on1, on2, on3, our_lead):
     """Leverage index for the game state, from 2018-2020 regular seasons.
@@ -187,29 +120,6 @@ def leverage(con, inning, pitching_half, outs, on1, on2, on3, our_lead):
                          WHERE inning = ? AND half = ? AND outs = ? AND bases = ? AND diff = ?""",
                       (min(int(inning), 9), pitching_half, outs, bases, diff)).fetchone()
     return (row["li"], row["n_pa"]) if row else (None, 0)
-
-
-def decision(starter_woba, scenarios, li, n_batters):
-    """Win-probability change (in points) from pulling the starter, for each reliever scenario."""
-    rows = []
-    for s in scenarios:
-        runs = n_batters * (starter_woba - s["xwoba"]) / WOBA_SCALE
-        dwp = runs * li / RUNS_PER_WIN if li is not None else None
-        rows.append({**s, "gap": starter_woba - s["xwoba"], "runs": runs,
-                     "points": dwp * 100 if dwp is not None else None})
-    up = rows[0]["points"]
-    down = rows[-1]["points"]
-    if up is None:
-        verdict, need = "unknown", None
-    elif up > 0 and down > 0:
-        verdict, need = "pull", None
-    elif up <= 0 and down <= 0:
-        verdict, need = "stay", None
-    else:
-        # Pulling is worth it only if you're confident enough the reliever is at full strength.
-        need = -down / (up - down)
-        verdict = "depends"
-    return {"rows": rows, "verdict": verdict, "confidence_needed": need}
 
 
 # ---------------------------------------------------------------- pitching coach: today's starter
@@ -236,8 +146,8 @@ def starter_card(con, team, on_or_before):
                                 "game_type = 'R' AND season = ? AND game_date < ?",
                                 (season, game["game_date"]))
     today_tot = pitcher_totals(con, today["pitcher"], "game_pk = ?", (game["game_pk"],))
-    tto = con.execute("""SELECT SUM(early_pa) AS epa, SUM(early_woba_sum) AS ew,
-                                SUM(third_pa) AS tpa, SUM(third_woba_sum) AS tw, COUNT(*) AS starts
+    tto = con.execute("""SELECT SUM(early_pa) AS epa, SUM(early_xwoba_sum) AS ew,
+                                SUM(third_pa) AS tpa, SUM(third_xwoba_sum) AS tw, COUNT(*) AS starts
                          FROM starter_games
                          WHERE pitcher = ? AND game_type = 'R' AND season = ? AND game_date < ?""",
                       (today["pitcher"], season, game["game_date"])).fetchone()
@@ -286,60 +196,13 @@ def starter_card(con, team, on_or_before):
 
 # ---------------------------------------------------------------- bullpen coach: who's ready?
 
-def bullpen(con, team, as_of):
-    """Relievers who pitched for the team in the 45 days before as_of, best options first."""
-    ids = [r[0] for r in con.execute("""SELECT DISTINCT pitcher FROM pitcher_games
-                                        WHERE team = ? AND is_starter = 0
-                                          AND game_date >= ? AND game_date < ?""",
-                                     (team, day_before(as_of, 45), as_of))]
-    season = int(as_of[:4])
-    where, params, label = recent_window(con, as_of)
-    out = []
-    for pid in ids:
-        info = con.execute("""SELECT pitcher_name, throws, MAX(game_date) AS last FROM pitcher_games
-                              WHERE pitcher = ? AND game_date < ?""", (pid, as_of)).fetchone()
-        rest = (date.fromisoformat(as_of) - date.fromisoformat(info["last"])).days - 1
-        last3 = con.execute("""SELECT COALESCE(SUM(pitches), 0), COUNT(*) FROM pitcher_games
-                               WHERE pitcher = ? AND game_date >= ? AND game_date < ?""",
-                            (pid, day_before(as_of, 3), as_of)).fetchone()
-        apps7 = con.execute("""SELECT COUNT(*) FROM pitcher_games
-                               WHERE pitcher = ? AND game_date >= ? AND game_date < ?""",
-                            (pid, day_before(as_of, 7), as_of)).fetchone()[0]
-        season_tot = pitcher_totals(con, pid, "game_type = 'R' AND season = ? AND game_date < ?",
-                                    (season, as_of))
-        recent = pitcher_totals(con, pid, where, params)
-        sc = reliever_scenarios(con, pid, as_of)
-        splits = {r["batter_side"]: r["xwoba"] for r in con.execute(
-            "SELECT batter_side, xwoba, pa FROM pitcher_splits WHERE pitcher = ? AND pa >= 30", (pid,))}
-
-        notes = []
-        if rest == 0:
-            notes.append(("warn", "Pitched yesterday"))
-        if last3[1] >= 2:
-            notes.append(("warn", f"{last3[1]} outings in the last 3 days"))
-        if last3[0] >= 35:
-            notes.append(("warn", f"{last3[0]} pitches in the last 3 days"))
-        if recent and season_tot:
-            if (recent["velo"] and season_tot["velo"] and recent["ff_n"] >= 20
-                    and recent["velo"] - season_tot["velo"] <= -1.0):
-                notes.append(("warn", f"Velocity down {season_tot['velo'] - recent['velo']:.1f} mph"))
-            if (recent["whiff"] is not None and season_tot["whiff"] is not None
-                    and recent["swings"] >= 25 and recent["whiff"] - season_tot["whiff"] <= -0.08):
-                notes.append(("warn", f"Whiff rate down {100 * (season_tot['whiff'] - recent['whiff']):.0f} pts"))
-        if not notes and rest >= 1:
-            notes.append(("ok", "Rested, no warning signs"))
-
-        out.append({
-            "pitcher": pid, "name": flip_name(info["pitcher_name"]), "throws": info["throws"],
-            "last": info["last"], "rest": rest, "pitches3": last3[0], "apps7": apps7,
-            "last_label": "{0:%b} {0.day}".format(date.fromisoformat(info["last"])),
-            "season": season_tot, "recent": recent,
-            "expected": sc["scenarios"][1]["xwoba"],
-            "vs_l": splits.get("L"), "vs_r": splits.get("R"),
-            "notes": notes,
-        })
-    out.sort(key=lambda r: r["expected"])
-    return {"relievers": out, "recent_label": label, "season": season}
+def relievers_used(con, team, as_of):
+    """Relievers the team used in the 45 days before the date (for The Hook's dropdown)."""
+    rows = con.execute("""SELECT pitcher, MAX(pitcher_name) AS name, MAX(throws) AS throws FROM pitcher_games
+                          WHERE team = ? AND is_starter = 0 AND game_date >= ? AND game_date < ?
+                          GROUP BY pitcher""", (team, day_before(as_of, 45), as_of)).fetchall()
+    return sorted(({"pitcher": r["pitcher"], "name": flip_name(r["name"]), "throws": r["throws"]} for r in rows),
+                  key=lambda r: r["name"])
 
 
 # ---------------------------------------------------------------- game: win probability

@@ -27,7 +27,7 @@
 {# Round player headshot. Decorative: the player's name is always written next to it.
    If the tablet is offline, it falls back to a plain grey circle. #}
 {% macro face(player_id, size=48) -%}
-<img class="face" src="{{ headshot(player_id) }}" alt="" width="{{ size }}" height="{{ size }}" loading="lazy"
+<img class="face" src="{{ headshot(player_id) }}" alt="" width="{{ size }}" height="{{ size }}"
      onerror="this.onerror=null; this.src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='">
 {%- endmacro %}
 

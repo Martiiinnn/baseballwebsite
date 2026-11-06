@@ -17,6 +17,7 @@ from flask import Flask, g, redirect, render_template, request, url_for
 
 import charts
 import mlb
+import model
 import queries as q
 
 # Static files live in public/static so they work both locally and on Vercel,
@@ -110,19 +111,21 @@ def game6_review():
 
     card = q.starter_card(con, DEFAULT_TEAM, DEFAULT_DATE)
     lk = card["manager_link"]
-    similar = q.comparable_starts(con, lk["k_min"], lk["woba_max"], lk["pitch_max"])
-    everyone = q.comparable_starts(con, 0, 9, 999)
-    rel = q.reliever_scenarios(con, CASE_RELIEVER, DEFAULT_DATE)
+    similar = model.comparable_starts(con, lk["k_min"], lk["woba_max"], lk["pitch_max"], DEFAULT_DATE)
+    everyone = model.comparable_starts(con, 0, 9, 999, DEFAULT_DATE)
+    rel = model.reliever(con, CASE_RELIEVER, DEFAULT_DATE)
+    where, params, _ = q.recent_window(con, DEFAULT_DATE)
+    rel_recent = q.pitcher_totals(con, CASE_RELIEVER, where, params)
     rel_season = q.pitcher_totals(con, CASE_RELIEVER, "game_type = 'R' AND season = 2020")
     li, _ = q.leverage(con, 6, "Bot", 1, 1, 0, 0, 1)
-    result = q.decision(similar["woba"], rel["scenarios"], li, 3)
+    result = model.decide(similar, rel, li, 3)
 
     return render_template(
         "overview.html", active="game6", team=DEFAULT_TEAM, game_pk=game["game_pk"],
         rel_id=CASE_RELIEVER,
         chart=charts.win_prob_svg(wp, DEFAULT_TEAM, CASE_PULL_AB, "Snell pulled", height=380),
         pull=pull, inning_end=inning_end, swings=swings, final=wp[-1]["after"],
-        card=card, similar=similar, everyone=everyone, rel=rel, rel_season=rel_season,
+        card=card, similar=similar, everyone=everyone, rel=rel, rel_recent=rel_recent, rel_season=rel_season,
         li=li, li_label=q.leverage_label(li), result=result)
 
 
@@ -146,18 +149,16 @@ def hook():
     else:
         on1, on2, on3 = True, False, False     # Game 6: runner on first
 
-    pen = q.bullpen(con, team, day)["relievers"]
-    options = sorted(pen, key=lambda r: r["name"])
+    options = q.relievers_used(con, team, day)
     rel_id = arg("reliever", CASE_RELIEVER if team == DEFAULT_TEAM else None, int)
-    if rel_id not in {r["pitcher"] for r in pen}:
-        rel_id = pen[0]["pitcher"] if pen else None
+    if rel_id not in {r["pitcher"] for r in options}:
+        rel_id = options[0]["pitcher"] if options else None
 
-    starts = q.comparable_starts(con, k_min, woba_max, pitch_max)
+    starts = model.comparable_starts(con, k_min, woba_max, pitch_max, day)
     li, li_n = q.leverage(con, inning, half, outs, on1, on2, on3, lead)
-    rel = q.reliever_scenarios(con, rel_id, day) if rel_id else None
-    result = (q.decision(starts["woba"], rel["scenarios"], li, n_batters)
-              if rel and starts["woba"] is not None and li is not None else None)
-    rel_name = next((r["name"] for r in pen if r["pitcher"] == rel_id), None)
+    rel = model.reliever(con, rel_id, day) if rel_id else None
+    result = model.decide(starts, rel, li, n_batters) if rel else None
+    used = model.data_used(starts, rel, day) if rel else []
 
     return render_template(
         "manager.html", active="hook", teams=teams, span=span, team=team, day=day,
@@ -165,7 +166,7 @@ def hook():
               "batters": n_batters, "inning": inning, "half": half, "outs": outs,
               "lead": lead, "on1": on1, "on2": on2, "on3": on3, "reliever": rel_id},
         options=options, starts=starts, li=li, li_n=li_n, li_label=q.leverage_label(li),
-        rel=rel, rel_name=rel_name, result=result)
+        rel=rel, result=result, used=used)
 
 
 @app.route("/mound-visit")
@@ -176,7 +177,7 @@ def mound_visit():
     similar = None
     if card:
         lk = card["manager_link"]
-        similar = q.comparable_starts(con, lk["k_min"], lk["woba_max"], lk["pitch_max"])
+        similar = model.comparable_starts(con, lk["k_min"], lk["woba_max"], lk["pitch_max"], card["game"]["game_date"])
     return render_template("pitching.html", active="mound", teams=teams, span=span,
                            team=team, day=day, card=card, similar=similar)
 
@@ -185,7 +186,7 @@ def mound_visit():
 def bullpen():
     con = db()
     team, day, teams, span = team_and_date()
-    pen = q.bullpen(con, team, day)
+    pen = model.bullpen(con, team, day)
     return render_template("bullpen.html", active="bullpen", teams=teams, span=span,
                            team=team, day=day, pen=pen)
 

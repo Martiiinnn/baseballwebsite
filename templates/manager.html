@@ -19,28 +19,68 @@
 </header>
 
 {% if result %}
-{% set rows = result.rows %}
-<div class="section-label with-face">{{ face(form.reliever, 40) }}<div><h2>Win probability change if you bring in {{ rel_name }}</h2>
-  {% call info("About these numbers") %}How much pulling the starter changes your team's chance to win over the
-    next {{ form.batters }} batters, for three versions of {{ rel_name }}. It compares his expected wOBA with your
-    starter's third time through. Lower wOBA is better for the pitcher; at this leverage each .010 of wOBA
-    is worth about {{ num(form.batters / 1.2 * li / 10, 2) }} points.{% endcall %}</div></div>
+{% set r = rel %}
+<div class="section-label with-face">{{ face(r.pitcher, 40) }}<div><h2>Win probability change if you bring in {{ r.name }}</h2>
+  {% call info("About these numbers") %}How much pulling the starter changes your team's chance to win over the next
+    {{ form.batters }} batters. Both pitchers are measured in expected wOBA (xwOBA) using only games before the date;
+    lower is better for the pitcher. At this leverage each .010 of xwOBA is worth about {{ num(result.per_010, 2) }} points.
+    These are estimates against average hitters: who is due up is not included yet.{% endcall %}</div></div>
 <section class="big-grid" aria-live="polite">
-  {% for r in rows %}
   <div class="tile">
-    <span class="tile-label">{{ r.name }} {% call info("About " ~ r.name | lower) %}{{ r.basis[:1] | upper }}{{ r.basis[1:] }}.{% endcall %}</span>
-    <span class="big-value {{ 'pos' if r.points > 0 else 'neg' }}">{{ signed(r.points) }} <small>pts</small></span>
-    <span class="tile-foot">Expected wOBA {{ woba(r.xwoba) }} · starter {{ woba(starts.woba) }}</span>
+    <span class="tile-label">If he's unchanged
+      {% call info("If he's unchanged") %}All of his games before the date ({{ r.history.pa + r.recent.pa }} plate appearances).
+        Strikeout rate, walk rate and contact quality are each pulled toward the league average, by 60, 130 and
+        600 events, because they become reliable at very different sample sizes. Projected xwOBA
+        {{ woba(r.stable) }} ± {{ woba(1.96 * r.stable_sd) }}.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if result.stable > 0 else 'neg' }}">{{ signed(result.stable) }} <small>pts</small></span>
+    <span class="tile-foot">xwOBA {{ woba(r.stable) }} · starter {{ woba(starts.xwoba) }}</span>
   </div>
-  {% endfor %}
+  <div class="tile">
+    <span class="tile-label">If he has changed
+      {% call info("If he has changed") %}Only {{ r.label }} ({{ r.recent.pa }} plate appearances), pulled toward the
+        league average the same way. Projected xwOBA {{ woba(r.changed) }} ± {{ woba(1.96 * r.changed_sd) }}.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if result.changed > 0 else 'neg' }}">{{ signed(result.changed) }} <small>pts</small></span>
+    <span class="tile-foot">xwOBA {{ woba(r.changed) }} · starter {{ woba(starts.xwoba) }}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Expected
+      {% call info("About the expected value") %}The two cases weighted by the chance he has changed
+        ({{ pct(result.p_changed) }}). The chance pulling is better also counts the uncertainty in both
+        pitchers' numbers.{% endcall %}</span>
+    <span class="big-value {{ 'pos' if result.expected > 0 else 'neg' }}">{{ signed(result.expected) }} <small>pts</small></span>
+    <span class="tile-foot">Chance pulling is better: {{ pct(result.p_pull_better) }}</span>
+  </div>
 </section>
 
 <section class="tiles" aria-label="Inputs to the decision">
   <div class="tile">
+    <span class="tile-label">His strikeouts, {{ r.label }}
+      {% call info("Has he changed?") %}What his history predicts, {% if r.postseason %}adjusted for the
+        postseason hitters he faced (they strike out less than average), {% endif %}compared with what he did.
+        The chance he has changed starts at 10% (chosen by a backtest on 2019–2020 relievers) and rises the more
+        surprising his recent strikeouts are ({{ signed(r.z) }} standard deviations).{% endcall %}</span>
+    <span class="tile-value">{{ r.recent_k }} <small>vs {{ num(r.expected_k, 1) }} expected</small></span>
+    <span class="tile-foot">{{ pct(result.p_changed) }} chance he has changed</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Break-even
+      {% call info("About break-even") %}The chance he has changed at which pulling and staying are worth the same.{% endcall %}</span>
+    {% if result.break_even is not none %}
+      <span class="tile-value">{{ pct(result.break_even) }}</span>
+      <span class="tile-foot">pull only if the chance he has changed is {{ result.pull_if }} this</span>
+    {% else %}
+      <span class="tile-value">—</span>
+      <span class="tile-foot">{{ 'Pulling gains either way' if result.pull_if == 'always' else 'Pulling loses either way' }}</span>
+    {% endif %}
+  </div>
+  <div class="tile">
     <span class="tile-label">Your starter, third time through
-      {% call info("About the starter's number") %}The wOBA hitters posted the third time through in
-        2018–2020 regular-season starts that meet the filters below. ± is the 95% range.{% endcall %}</span>
-    <span class="tile-value">{{ woba(starts.woba) }} <small>± {{ woba(starts.ci) }}</small></span>
+      {% call info("About the starter's number") %}xwOBA hitters posted the third time through in {{ starts.starts }}
+        regular-season starts before the date that meet the filters below ({{ starts.pitchers }} pitchers).
+        {{ starts.reached }} of them reached a third time and {{ starts.three }} faced at least 3 batters. Through two times
+        those starts allowed {{ woba(starts.early_xwoba) }} xwOBA: picking dominant starts picks some luck, so the
+        third time looks closer to average. ± is a 95% range for the average, clustered by pitcher.{% endcall %}</span>
+    <span class="tile-value">{{ woba(starts.xwoba) }} <small>± {{ woba(1.96 * starts.se) }}</small></span>
     <span class="tile-foot">{{ starts.starts }} similar starts{% if starts.pa < 300 %} · <strong>small sample</strong>{% endif %}</span>
   </div>
   <div class="tile">
@@ -49,18 +89,6 @@
         score, outs and runners. 1.0 is an average plate appearance. Based on {{ li_n }} regular-season
         plate appearances in this exact spot.{% endcall %}</span>
     <span class="tile-value">{{ num(li, 2) }} <small>{{ li_label }}</small></span>
-  </div>
-  <div class="tile">
-    <span class="tile-label">Break-even
-      {% call info("About break-even") %}How sure you need to be that {{ rel_name }} is at full strength
-        for pulling to come out ahead.{% endcall %}</span>
-    {% if result.verdict == 'depends' %}
-      <span class="tile-value">{{ pct(result.confidence_needed) }}</span>
-      <span class="tile-foot">sure he's at full strength</span>
-    {% else %}
-      <span class="tile-value">—</span>
-      <span class="tile-foot">{{ 'Pulling gains in all three' if result.verdict == 'pull' else 'Pulling loses in all three' }}</span>
-    {% endif %}
   </div>
 </section>
 {% else %}
@@ -92,7 +120,7 @@
              onchange="this.form.submit()"></label>
     <label>Reliever
       <select name="reliever">
-        {% for r in options %}<option value="{{ r.pitcher }}" {% if r.pitcher == form.reliever %}selected{% endif %}>{{ r.name }} ({{ r.throws }}HP)</option>{% endfor %}
+        {% for o in options %}<option value="{{ o.pitcher }}" {% if o.pitcher == form.reliever %}selected{% endif %}>{{ o.name }} ({{ o.throws }}HP)</option>{% endfor %}
       </select></label>
   </fieldset>
 
@@ -127,9 +155,20 @@
 
 <details class="panel method">
   <summary>How this is calculated</summary>
-  <p>The starter's number is how hitters did the third time through in 2018–2020 regular-season starts
-    that met all three filters above. The reliever's numbers use only games before the date you pick.
-    The difference in expected wOBA, times the batters affected, divided by 1.2 gives runs; runs times
-    leverage divided by 10 gives wins. Handedness matchups aren't included here.</p>
+  <p>Both pitchers are measured in expected wOBA (xwOBA). The starter's number is how hitters did the third time
+    through in earlier regular-season starts that meet the filters above. The reliever's is projected from his own
+    games, with each part pulled toward the league average. The difference, times the batters affected, divided by
+    1.2 gives runs; runs times leverage divided by 10 gives wins. A reliever must face at least three batters,
+    while the starter could face one more and be reassessed: that option isn't modeled yet.</p>
+  {% if used %}
+  <div class="table-wrap"><table class="mini used">
+    <thead><tr><th>Input</th><th>Data used</th><th class="num">Before the date?</th></tr></thead>
+    <tbody>
+    {% for name, what, ok in used %}
+      <tr><td>{{ name }}</td><td>{{ what }}</td><td class="num">{{ '✓' if ok else '✗ not yet' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
 </details>
 {% endblock %}

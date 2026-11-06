@@ -2,7 +2,6 @@
 {% from "_macros.html" import info, team_logo, face, film_link %}
 {% block title %}Game 6 Review{% endblock %}
 {% block content %}
-{% set rows = result.rows %}
 {% set velo = card.rows[0][1] %}{% set whiff = card.rows[2][1] %}{% set kr = card.rows[3][1] %}
 <header class="page-head">
   <div>
@@ -68,15 +67,20 @@
         <tr><td>Strikeout rate</td><td class="num">{{ pct(kr.today) }}</td><td class="num">{{ pct(kr.season) }}</td></tr>
       </tbody>
     </table>
-    <dl class="stats">
-      <div><dt>Third time through, {{ similar.starts }} starts this dominant
+    <table class="mini">
+      <thead><tr><th>Earlier starts (xwOBA)</th><th class="num">Times 1–2</th><th class="num">Time 3</th></tr></thead>
+      <tbody>
+        <tr><td>{{ similar.starts }} this dominant
           {% call info("Starts this dominant") %}2018–2020 regular-season starts with at least
             {{ ((card.manager_link.k_min * 100) | round | int) }}% strikeouts, a wOBA of {{ woba(card.manager_link.woba_max) }} or lower
-            and {{ card.manager_link.pitch_max }} pitches or fewer through two times. The number is the wOBA hitters
-            posted the third time through.{% endcall %}</dt>
-        <dd>{{ woba(similar.woba) }}</dd></div>
-      <div><dt>Third time through, all {{ everyone.starts }} starts</dt><dd>{{ woba(everyone.woba) }}</dd></div>
-    </dl>
+            and {{ card.manager_link.pitch_max }} pitches or fewer through two times ({{ similar.pitchers }} pitchers).
+            {{ similar.reached }} reached a third time; {{ similar.three }} faced at least 3 batters.
+            Picking dominant starts picks some luck, so the third time looks closer to average.{% endcall %}</td>
+          <td class="num">{{ woba(similar.early_xwoba) }}</td><td class="num">{{ woba(similar.xwoba) }}</td></tr>
+        <tr><td>All {{ "{:,}".format(everyone.starts) }}</td>
+          <td class="num">{{ woba(everyone.early_xwoba) }}</td><td class="num">{{ woba(everyone.xwoba) }}</td></tr>
+      </tbody>
+    </table>
     <a class="card-link" href="{{ url_for('mound_visit') }}">Open Mound Visit →</a>
   </article>
 
@@ -86,12 +90,21 @@
     <table class="mini">
       <thead><tr><th></th><th class="num">Postseason</th><th class="num">{{ card.season }} season</th></tr></thead>
       <tbody>
-        <tr><td>Fastball (mph)</td><td class="num">{{ num(rel.recent.velo) }}</td><td class="num">{{ num(rel_season.velo) }}</td></tr>
-        <tr><td>Whiff rate</td><td class="num">{{ pct(rel.recent.whiff) }}</td><td class="num">{{ pct(rel_season.whiff) }}</td></tr>
-        <tr><td>Expected wOBA</td><td class="num">{{ woba(rel.recent.xwoba) }}</td><td class="num">{{ woba(rel_season.xwoba) }}</td></tr>
-        <tr><td>Outings</td><td class="num">{{ rel.recent.games }}</td><td class="num">{{ rel_season.games }}</td></tr>
+        <tr><td>Fastball (mph)</td><td class="num">{{ num(rel_recent.velo) }}</td><td class="num">{{ num(rel_season.velo) }}</td></tr>
+        <tr><td>Whiff rate</td><td class="num">{{ pct(rel_recent.whiff) }}</td><td class="num">{{ pct(rel_season.whiff) }}</td></tr>
+        <tr><td>Strikeout rate</td><td class="num">{{ pct(rel_recent.k_pct) }}</td><td class="num">{{ pct(rel_season.k_pct) }}</td></tr>
+        <tr><td>Expected wOBA</td><td class="num">{{ woba(rel_recent.xwoba) }}</td><td class="num">{{ woba(rel_season.xwoba) }}</td></tr>
+        <tr><td>Outings</td><td class="num">{{ rel_recent.games }}</td><td class="num">{{ rel_season.games }}</td></tr>
       </tbody>
     </table>
+    <dl class="stats">
+      <div><dt>Postseason strikeouts vs expected
+          {% call info("Has he changed?") %}Strikeouts his history predicted against the postseason hitters he faced,
+            compared with what he did ({{ signed(rel.z) }} standard deviations). That moves the chance he has
+            changed from 10% to {{ pct(rel.p_changed) }}.{% endcall %}</dt>
+        <dd>{{ rel.recent_k }} vs {{ num(rel.expected_k, 1) }}</dd></div>
+      <div><dt>Chance he has changed</dt><dd>{{ pct(rel.p_changed) }}</dd></div>
+    </dl>
     <a class="card-link" href="{{ url_for('bullpen') }}">Open Bullpen Board →</a>
   </article>
 
@@ -99,17 +112,16 @@
     <div class="card-head"><span class="faces">{{ face(card.pitcher) }}{{ face(rel_id) }}</span>
       <div><p class="card-role">The Hook</p><h3>Snell → Anderson</h3></div></div>
     <dl class="stats">
-      {% for r in rows %}
-      <div><dt>{{ r.name }}</dt>
-        <dd class="{{ 'pos' if r.points > 0 else 'neg' }}">{{ signed(r.points) }} pts</dd></div>
-      {% endfor %}
-      {% if result.confidence_needed is not none %}
-      <div><dt>Break-even
-          {% call info("About break-even") %}Win probability change from pulling Snell, over the next 3 batters,
-            for three versions of Anderson. Pulling comes out ahead only if you're at least this sure
-            he's at full strength.{% endcall %}</dt>
-        <dd>{{ pct(result.confidence_needed) }}</dd></div>
-      {% endif %}
+      <div><dt>If Anderson is unchanged</dt>
+        <dd class="{{ 'pos' if result.stable > 0 else 'neg' }}">{{ signed(result.stable) }} pts</dd></div>
+      <div><dt>If he has changed</dt>
+        <dd class="{{ 'pos' if result.changed > 0 else 'neg' }}">{{ signed(result.changed) }} pts</dd></div>
+      <div><dt>Expected ({{ pct(result.p_changed) }} changed)
+          {% call info("About these numbers") %}Win probability change from pulling Snell over the next 3 batters,
+            in expected wOBA on both sides. Pulling comes out ahead only if the chance Anderson has changed is
+            {{ result.pull_if }} {{ pct(result.break_even) }}.{% endcall %}</dt>
+        <dd class="{{ 'pos' if result.expected > 0 else 'neg' }}">{{ signed(result.expected) }} pts</dd></div>
+      <div><dt>Chance pulling is better</dt><dd>{{ pct(result.p_pull_better) }}</dd></div>
     </dl>
     <a class="card-link" href="{{ url_for('hook') }}">Open The Hook →</a>
   </article>
@@ -122,15 +134,16 @@
     <dd>Every pitch from the 2018–2020 regular seasons and the 2020 postseason (Statcast via pybaseball),
       loaded into SQLite and checked 10 ways before use, including matching Snell's official Game 6 box score.</dd>
     <dt>Starter</dt>
-    <dd>Regular-season starts where the pitcher was at least this dominant through two times, and how hitters
-      did the third time through.</dd>
+    <dd>Earlier regular-season starts about as dominant through two times, and the expected wOBA (xwOBA)
+      hitters posted the third time through.</dd>
     <dt>Reliever</dt>
-    <dd>Three versions of Anderson: full strength (2019–20 regular seasons), recent form (this postseason
-      blended with full strength) and recent form taken at face value. Small samples are blended with
-      300 plate appearances of the baseline.</dd>
+    <dd>Strikeout rate, walk rate and contact quality, each pulled toward the league average by an amount
+      estimated from the data (60, 130 and 600 events). "Unchanged" uses all his games; "changed" uses only the
+      postseason. The chance he has changed comes from how far his postseason strikeouts fell below what his
+      history predicted against those hitters, starting from a 10% prior chosen by a backtest.</dd>
     <dt>Win probability</dt>
-    <dd>Expected wOBA difference over 3 batters ÷ 1.2 = runs; runs × leverage ÷ 10 = wins.
-      Accounting for each hitter's handedness gives nearly the same answer (+1.7 / +0.7 / −4.7).</dd>
+    <dd>xwOBA difference over 3 batters ÷ 1.2 = runs; runs × leverage ÷ 10 = wins. A game-state simulation
+      is the planned replacement.</dd>
   </dl>
 </details>
 {% endblock %}

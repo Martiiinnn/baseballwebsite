@@ -46,21 +46,23 @@
 <section class="tiles" aria-label="Third time through the order">
   <div class="tile">
     <span class="tile-label">His third time through, {{ card.season }}
-      {% call info("About his own pattern") %}wOBA hitters posted against him the third time through the order
-        in his {{ card.tto.starts }} regular-season starts before this date.
+      {% call info("About his own pattern") %}Expected wOBA (xwOBA) hitters posted against him the third time through
+        the order in his {{ card.tto.starts }} regular-season starts before this date.
         {% if card.tto.third_pa < 60 %}Only {{ card.tto.third_pa }} plate appearances, so treat it as a hint, not a rule.{% endif %}{% endcall %}</span>
     <span class="tile-value">{{ woba(card.tto.third) }}</span>
-    <span class="tile-foot">First two times {{ woba(card.tto.early) }} · {{ card.tto.third_pa }} PA</span>
+    <span class="tile-foot">First two times {{ woba(card.tto.early) }} · {{ card.tto.third_pa }} PA · xwOBA</span>
   </div>
-  {% if similar and similar.woba is not none %}
+  {% if similar and similar.xwoba is not none %}
   <div class="tile">
     <span class="tile-label">Starts this dominant, third time through
-      {% call info("Starts this dominant") %}2018–2020 regular-season starts with at least
+      {% call info("Starts this dominant") %}Regular-season starts before this date with at least
         {{ ((card.manager_link.k_min * 100) | round | int) }}% strikeouts, a wOBA of {{ woba(card.manager_link.woba_max) }} or lower
-        and {{ card.manager_link.pitch_max }} pitches or fewer through two times.
-        Today through two times: {{ pct(card.early_k) }} strikeouts, {{ woba(card.early_woba) }} wOBA.{% endcall %}</span>
-    <span class="tile-value">{{ woba(similar.woba) }}</span>
-    <span class="tile-foot">{{ similar.starts }} starts ·
+        and {{ card.manager_link.pitch_max }} pitches or fewer through two times: {{ similar.starts }} starts by
+        {{ similar.pitchers }} pitchers. {{ similar.reached }} reached a third time. Through two times they allowed
+        {{ woba(similar.early_xwoba) }} xwOBA; picking dominant starts picks some luck, so the third time looks closer
+        to average. Today through two times: {{ pct(card.early_k) }} strikeouts, {{ woba(card.early_woba) }} wOBA.{% endcall %}</span>
+    <span class="tile-value">{{ woba(similar.xwoba) }} <small>± {{ woba(1.96 * similar.se) }}</small></span>
+    <span class="tile-foot">{{ similar.reached }} of {{ similar.starts }} starts · xwOBA ·
       <a href="{{ url_for('hook', k_min=(card.manager_link.k_min * 100) | round | int,
         woba_max=card.manager_link.woba_max, pitch_max=card.manager_link.pitch_max, team=team, date=card.game.game_date) }}">Compare with a reliever →</a></span>
   </div>
