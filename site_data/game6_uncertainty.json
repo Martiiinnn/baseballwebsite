@@ -1,0 +1,9 @@
+{
+  "n_draws": 10000,
+  "p_pull_better": 0.2591,
+  "range90": [
+    -3.44,
+    1.79
+  ],
+  "made_by": "analysis/game6_review_checks.py (seed 5)"
+}

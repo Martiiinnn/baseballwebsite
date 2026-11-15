@@ -172,6 +172,8 @@ def main():
     print("   hitters' rates drawn from their posteriors, and Anderson's version drawn with P(changed))")
     print(f"   pulling now vs. Snell finishing: expected {r['points']['expected']:+.1f} points, 90% range "
           f"{r['range90'][0]:+.1f} to {r['range90'][1]:+.1f}; chance pulling was better {r['p_pull_better']:.0%}")
+    print("   200 draws leave about 3 points of sampling error on that chance; analysis/game6_review_checks.py repeats it")
+    print("   with 10,000 draws (26%), which is the number the site shows for Game 6.")
 
 
 if __name__ == "__main__":

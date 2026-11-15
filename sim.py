@@ -392,6 +392,7 @@ def evaluate(con, rel, as_of, team, inning, half, outs, bases, lead, filters, du
         draws.append(one.fixed("reliever")(*state) - one.fixed("starter")(*state))
     draws.sort()
     n = len(draws)
+    p_better = sum(d > 0 for d in draws) / n
     e = res["expected"]
     return {
         "strategies": e, "unchanged": res["unchanged"], "changed": res["changed"],
@@ -401,7 +402,8 @@ def evaluate(con, rel, as_of, team, inning, half, outs, bases, lead, filters, du
         "best": ("one_more" if e["one_more"] > max(e["pull_now"], e["stay"]) + 0.0005
                  else ("pull_now" if e["pull_now"] > e["stay"] else "stay")),
         "break_even": break_even, "pull_if": pull_if, "p_changed": P,
-        "p_pull_better": sum(d > 0 for d in draws) / n,
+        "p_pull_better": p_better,
+        "p_se": math.sqrt(p_better * (1 - p_better) / n),     # sampling error of p_pull_better
         "range90": (100 * draws[int(0.05 * n)], 100 * draws[int(0.95 * n)]),
         "lineup": order, "due_spot": spot, "starter_name": model.flip_name(st["pitcher_name"]) if st else None,
         "starter_hand": s_hand, "starts": len(starts), "starter_rates": starter,

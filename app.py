@@ -11,8 +11,10 @@ Old addresses (/, /manager, /pitching-coach) redirect to the new ones.
 Run locally:   python3 app.py        then open http://127.0.0.1:5001
 Data:          site_data/coaches.db  (built by build_database.py)
 """
+import json
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 
 from flask import Flask, g, redirect, render_template, request, url_for
 
@@ -34,6 +36,10 @@ DEFAULT_TEAM = "TB"
 DEFAULT_DATE = "2020-10-27"        # 2020 World Series Game 6
 CASE_RELIEVER = 623433             # Nick Anderson
 CASE_PULL_AB = 43                  # first batter after Snell left (Mookie Betts)
+CASE_STATE = (6, "Bot", 1, "100", 1)                   # inning, half, outs, runners, Rays' lead
+# The site draws 200 times (a sampling error of about 3 points on "chance pulling is better").
+# For Game 6 itself it shows the 10,000-draw result written by analysis/game6_review_checks.py.
+GAME6_UNCERTAINTY = Path(__file__).resolve().parent / "site_data" / "game6_uncertainty.json"
 
 
 def db():
@@ -115,9 +121,12 @@ def game6_simulation():
     card = q.starter_card(con, DEFAULT_TEAM, DEFAULT_DATE)
     lk = card["manager_link"]
     rel = model.reliever(con, CASE_RELIEVER, DEFAULT_DATE)
-    out = sim.evaluate(con, rel, DEFAULT_DATE, DEFAULT_TEAM, 6, "Bot", 1, "100", 1,
+    out = sim.evaluate(con, rel, DEFAULT_DATE, DEFAULT_TEAM, *CASE_STATE,
                        (lk["k_min"], lk["woba_max"], lk["pitch_max"]), due=case_due_up(con))
     con.close()
+    if GAME6_UNCERTAINTY.exists():
+        out.update(json.loads(GAME6_UNCERTAINTY.read_text()))
+        out["p_se"] = (out["p_pull_better"] * (1 - out["p_pull_better"]) / out["n_draws"]) ** 0.5
     return out
 
 
@@ -186,8 +195,15 @@ def hook():
     if due is None and team == DEFAULT_TEAM and day == DEFAULT_DATE:
         due = case_due_up(con)
     bases = f"{int(on1)}{int(on2)}{int(on3)}"
-    simres = (sim.evaluate(con, rel, day, team, inning, half, outs, bases, lead, (k_min, woba_max, pitch_max), due=due)
-              if rel and starts["xwoba"] is not None else None)
+    is_game6 = (team == DEFAULT_TEAM and day == DEFAULT_DATE and rel_id == CASE_RELIEVER
+                and (inning, half, outs, bases, lead) == CASE_STATE and due == case_due_up(con)
+                and (round(k_min, 4), round(woba_max, 4), pitch_max) == (0.35, 0.2, 85))
+    if is_game6:
+        simres = game6_simulation()        # same inputs, with the 10,000-draw uncertainty
+    else:
+        simres = (sim.evaluate(con, rel, day, team, inning, half, outs, bases, lead, (k_min, woba_max, pitch_max),
+                               due=due)
+                  if rel and starts["xwoba"] is not None else None)
 
     return render_template(
         "manager.html", active="hook", teams=teams, span=span, team=team, day=day,

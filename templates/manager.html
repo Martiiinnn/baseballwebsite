@@ -48,11 +48,12 @@
   <div class="tile">
     <span class="tile-label">Expected
       {% call info("About the expected value") %}The two cases weighted by the chance he has changed
-        ({{ pct(simres.p_changed) }}). The chance pulling is better comes from {{ simres.n_draws }} draws that also vary
-        both pitchers' and the hitters' rates within their uncertainty.{% endcall %}</span>
+        ({{ pct(simres.p_changed) }}). The chance pulling is better comes from {{ "{:,}".format(simres.n_draws) }} draws that also vary
+        both pitchers' and the hitters' rates within their uncertainty{% if simres.n_draws < 5000 %}; with this many
+        draws the chance itself is only good to about ± {{ pct(simres.p_se) }}{% endif %}.{% endcall %}</span>
     <span class="big-value {{ 'pos' if simres.points.expected > 0 else 'neg' }}">{{ signed(simres.points.expected) }} <small>pts</small></span>
-    <span class="tile-foot">Chance pulling is better: {{ pct(simres.p_pull_better) }} · 90% range
-      {{ signed(simres.range90[0]) }} to {{ signed(simres.range90[1]) }}</span>
+    <span class="tile-foot">Chance pulling is better: {{ pct(simres.p_pull_better) }}{% if simres.n_draws < 5000 %}
+      (± {{ pct(simres.p_se) }}){% endif %} · 90% range {{ signed(simres.range90[0]) }} to {{ signed(simres.range90[1]) }}</span>
   </div>
 </section>
 

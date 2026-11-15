@@ -52,7 +52,7 @@ Each page puts its key numbers first. Explanations sit behind ⓘ tips so coache
   | expected (86% changed) | 57.6% | 58.5% | **−1.0 points** |
 
   Pulling comes out ahead only if the chance he has changed is below **51%**. Counting the uncertainty in both pitchers' and the
-  hitters' numbers, the chance pulling was better is **20%** (90% range −3.5 to +1.8 points). **Letting Snell face Betts and
+  hitters' numbers, the chance pulling was better is **26%** (10,000 draws; 90% range −3.4 to +1.8 points). **Letting Snell face Betts and
   deciding again adds nothing**, whatever you believe about Anderson, and the best possible timing adds at most 0.1 point:
   Betts, a right-handed hitter, was Anderson's best matchup, so if you were going to pull Snell, it was before Betts. A simpler three-batter formula gives +1.9 / −1.9 / −1.3.
 - **What actually happened:** the Rays' win probability went from 60% to 31% over those three batters. One inning is far noisier
@@ -70,7 +70,8 @@ A review in November 2026 challenged the first version. Each fix is reproduced b
 | Each component with its own constant | +1.8 if unchanged, −2.2 if changed | One constant (300) for overall xwOBA was replaced by separate constants estimated from the data |
 | Change test on strikeouts | 98% changed, expected −2.2 | "How sure are you?" is now estimated from his strikeouts instead of asked |
 | Adjusted for the hitters he faced | 86% changed, expected −1.3 | Postseason hitters strike out less, which explains part of the drop |
-| Game-state simulation (current site) | +1.4 if unchanged, −1.3 if changed, expected **−1.0**; facing Betts first adds nothing | The fixed conversions (÷ 1.2, ÷ 10, three batters) were replaced by simulating the rest of the inning against the real lineup |
+| Game-state simulation | +1.4 if unchanged, −1.3 if changed, expected **−1.0**; facing Betts first adds nothing; pulling better in 20% of 200 draws | The fixed conversions (÷ 1.2, ÷ 10, three batters) were replaced by simulating the rest of the inning against the real lineup |
+| Editorial review (current site) | Same point estimates; pulling better in **26%** of 10,000 draws | One run of 200 draws can land anywhere from 20% to 31%, so Game 6 now uses 10,000. Added every Rays reliever and Snell's own record (see *Review checks*) |
 
 The 72% in the first version was never the chance Anderson was healthy. It was the weight between two scenario endpoints,
 and the data never measured how he felt that night. The current version replaces it with a probability estimated from his
@@ -157,8 +158,10 @@ score margin (2018–2020 regular seasons), divided by the average for all plate
    (`win_expectancy`, Statcast's model averaged over 2018–2020). After that, both teams are treated as average.
 4. **Three choices.** Pull now; let the starter face one more hitter, then take the better choice; let him finish. Plus the best
    possible timing (pull before any hitter). The reliever's two versions are weighted by P(changed).
-5. **Uncertainty.** 200 draws that resample the comparable starts by pitcher and draw each pitcher's and hitter's rates from
-   their posteriors, with the reliever's version drawn by P(changed).
+5. **Uncertainty.** Draws that resample the comparable starts by pitcher and draw each pitcher's and hitter's rates from
+   their posteriors, with the reliever's version drawn by P(changed). The site uses 200 draws for speed, which leaves about
+   ±3 points of sampling error on "chance pulling is better" (The Hook shows it). Game 6 uses 10,000 draws, precomputed by
+   `analysis/game6_review_checks.py` into `site_data/game6_uncertainty.json`.
 
 **Validation** (`analysis/game6_simulation.py`):
 
@@ -206,6 +209,38 @@ uses the reliever's last 50+ plate appearances as "recent", and predicts his nex
 The conclusion leans on the prior. With the prior the backtest chose, staying was better in every setting. With a very skeptical
 prior it is a coin flip.
 
+### Review checks
+
+Added after an editorial review of the Game 6 article (`analysis/game6_review_checks.py`).
+
+**Was Anderson the right reliever to compare?** The same simulation for every Rays reliever who had pitched in the 2020 World
+Series. None projects better than leaving Snell in. Anderson is the only one whose usual level beats Snell's third time through,
+and the one with the clearest warning sign:
+
+| Reliever | Throws | Postseason K: actual / expected | Weight on a change | Pulling Snell if unchanged | Expected |
+|---|---|---|---|---|---|
+| Diego Castillo | R | 12 / 10.4 | 7% | −0.2 | −0.2 |
+| Ryan Yarbrough | L | 7 / 11.3 | 7% | −0.2 | −0.3 |
+| Aaron Loup | L | 7 / 4.6 | 9% | −0.3 | −0.3 |
+| Pete Fairbanks | R | 15 / 11.6 | 5% | −0.4 | −0.4 |
+| Nick Anderson | R | 9 / 19.7 | 86% | **+1.4** | −1.0 |
+| John Curtiss | R | 9 / 9.6 | 9% | −1.0 | −1.0 |
+| Ryan Thompson | R | 10 / 7.4 | 11% | −1.1 | −1.1 |
+| Josh Fleming | L | 3 / 4.3 | 8% | −1.2 | −1.2 |
+| Shane McClanahan | L | 4 / 5.0 | 10% | −1.4 | −1.4 |
+| Ryan Sherriff | L | 1 / 1.3 | 8% | −1.6 | −1.5 |
+
+**Does estimating Snell from other pitchers' starts matter?** His own 2018–2020 third-time record (232 hitters: 24.6%
+strikeouts, .290 xwOBA, but 5.2% home runs) narrows the edge for staying. The direction holds; the size does not.
+
+| Snell's third-time estimate | Rays' chance to win if he finishes | Pulling Snell, expected | Break-even weight on a change |
+|---|---|---|---|
+| Comparable starts (used throughout) | 58.5% | −1.0 | 51% |
+| His own record, pulled toward comparable starts | 58.2% | −0.6 | 62% |
+| His own record, raw | 57.7% | −0.1 | 82% |
+
+**Is the chance stable?** 200 draws: 20.0% to 30.5% across 10 seeds. 2,000 draws: 23.8% to 26.7%. 10,000 draws: 25.9%.
+
 ### Data used for each input (Game 6)
 
 The Hook lists these for any date. Everything for Game 6 comes from games before it.
@@ -252,6 +287,8 @@ The Hook lists these for any date. Everything for Game 6 comes from games before
 - **Not everything is limited by date yet.** Handedness splits, leverage and the regression constants use all of 2018–2020. For
   Game 6 that is all earlier data; for an earlier date, those inputs include later games. The Hook marks leverage in its data
   list, and the Bullpen Board's ⓘ notes it for the splits.
+- **A retrospective rebuild.** Every game used is before the decision date, but the data was downloaded in 2026 and
+  Statcast's expected stats are computed as Baseball Savant publishes them today, not necessarily as they read at the time.
 - **Data ends in 2020.** Three seasons give only one Anderson-level stretch to test against, and the 2023 rule changes
   (pitch clock, shift limits) changed the run environment.
 - **Player photos are current.** MLB serves each player's current headshot, so some appear in a later team's cap.
@@ -280,6 +317,7 @@ python3 analysis/estimate_regression_constants.py   # split-half reliability -> 
 python3 analysis/backtest_reliever_change.py        # the change test, 2019 -> 2020
 python3 analysis/game6_checks.py                    # the Game 6 numbers before the simulation
 python3 analysis/game6_simulation.py                # validation, the three choices and their uncertainty
+python3 analysis/game6_review_checks.py             # other relievers, Snell's own record, 10,000 draws (~2 min)
 ```
 
 To rebuild everything from Statcast (the first run takes a while; later runs read from pybaseball's cache):
@@ -304,8 +342,8 @@ charts.py            win-probability chart, drawn as SVG on the server
 mlb.py               team colours, logos, headshots and game-film links
 templates/           page templates (Jinja)
 public/static/       stylesheet (Vercel serves public/ from its CDN)
-site_data/           coaches.db and DATA_DICTIONARY.md (every table and column)
-analysis/            regression constants, backtest and Game 6 checks
+site_data/           coaches.db, DATA_DICTIONARY.md and game6_uncertainty.json (Game 6, 10,000 draws)
+analysis/            regression constants, backtest, Game 6 checks and review checks
 build_database.py    Statcast → SQLite warehouse → checks → site database
 snell_*.py           the first version's Game 6 analysis
 output/              CSVs and charts from the analysis scripts
