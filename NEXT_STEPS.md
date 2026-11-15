@@ -1,6 +1,6 @@
 # Next steps (ideas, not started yet)
 
-Recorded Nov 2, 2026. Waiting on Sachin's feedback before choosing what to build first.
+Recorded Nov 2, 2026.
 
 ## 1. Matchup layer for the manager tool
 - **Handedness:** let the manager enter the next three hitters and use their splits vs. LHP/RHP
